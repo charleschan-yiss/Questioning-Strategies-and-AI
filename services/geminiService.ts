@@ -83,7 +83,7 @@ export const generateLessonPlan = async (input: LessonInput, strategyName: strin
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-  const prompt = `
+  const textPrompt = `
     Create a lesson plan for the following context:
     Topic: ${input.topic}
     Subject: ${input.subject}
@@ -91,6 +91,9 @@ export const generateLessonPlan = async (input: LessonInput, strategyName: strin
     Unit Name: ${input.unitName}
     Standards/Goals: ${input.standards}
     Additional Context: ${input.context}
+    
+    ${input.links ? `Referenced Links (Youtube/Web): ${input.links}. Use Google Search to find relevant content if needed.` : ''}
+    ${input.files && input.files.length > 0 ? `I have attached ${input.files.length} file(s) (Documents/Images/Audio/Video) for reference. Please analyze the content within these files to inform the lesson plan material, facts, and context.` : ''}
 
     **CRITICAL REQUIREMENT:**
     The primary questioning strategy for this lesson must be: **${strategyName}**
@@ -99,6 +102,21 @@ export const generateLessonPlan = async (input: LessonInput, strategyName: strin
     Ensure every section of the lesson plan explicitly utilizes this strategy.
   `;
 
+  // Build the parts array for the user message
+  const userParts: any[] = [{ text: textPrompt }];
+
+  // Attach any files as inline data
+  if (input.files && input.files.length > 0) {
+      input.files.forEach(file => {
+          userParts.push({
+              inlineData: {
+                  mimeType: file.mimeType,
+                  data: file.data
+              }
+          });
+      });
+  }
+
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
@@ -106,9 +124,10 @@ export const generateLessonPlan = async (input: LessonInput, strategyName: strin
         systemInstruction: getSystemInstruction(),
         temperature: 0.7, 
         maxOutputTokens: 4000,
+        tools: [{ googleSearch: {} }] // Added for link support
       },
       contents: [
-        { role: 'user', parts: [{ text: prompt }] }
+        { role: 'user', parts: userParts }
       ]
     });
 

@@ -117,7 +117,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ isOpen, onClose, c
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask about your lesson..."
-            className="flex-1 rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm px-3 py-2 border"
+            className="flex-1 rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm px-3 py-2 border bg-white text-slate-900 placeholder-slate-400"
           />
           <button 
             type="submit" 

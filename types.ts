@@ -8,6 +8,12 @@ export interface StrategyNode {
   children?: StrategyNode[];
 }
 
+export interface ReferenceFile {
+  name: string;
+  mimeType: string;
+  data: string; // Base64 string
+}
+
 export interface LessonInput {
   unitName: string;
   topic: string;
@@ -15,6 +21,8 @@ export interface LessonInput {
   subject: string;
   standards: string;
   context: string;
+  files: ReferenceFile[];
+  links: string[];
 }
 
 export interface GeneratedPlan {
