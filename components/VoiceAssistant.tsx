@@ -89,7 +89,6 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
       streamRef.current = stream;
 
       // Build Contextual System Instruction
-      // We explicitly list the fields so the model "sees" the form data.
       const systemContext = `
         You are a helpful teaching assistant for a teacher at YISS. 
         You help brainstorm lesson ideas, suggest questioning strategies, and discuss educational frameworks like CEL 5D+ and Biblical Integration. 
@@ -249,9 +248,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
 
   // Watch for Plan Generation and update the session if active
   useEffect(() => {
-    // Only trigger if we have an active session and the plan has changed significantly (e.g. newly generated)
     if (isActive && currentSessionRef.current && currentPlan && currentPlan !== prevPlanRef.current) {
-        
         const updateMessage = `
 [SYSTEM EVENT]
 The teacher has just generated or updated the lesson plan on screen.
@@ -259,9 +256,7 @@ NEW PLAN CONTENT:
 ${currentPlan}
 `;
         try {
-            // Send the text update to the model so it knows the context changed
             currentSessionRef.current.send({ parts: [{ text: updateMessage }] });
-            console.log("Sent plan update to Voice Assistant");
         } catch (e) {
             console.warn("Failed to send context update to voice session", e);
         }
@@ -276,68 +271,69 @@ ${currentPlan}
   }, []);
 
   return (
-    <div className="absolute bottom-6 left-6 z-40 flex flex-col items-start pointer-events-none">
-      
-      {(isActive || isConnecting) && (
-         <div className="pointer-events-auto bg-slate-900 text-white rounded-2xl shadow-2xl p-6 mb-4 w-72 border border-slate-700 animate-in slide-in-from-bottom-4">
-             <div className="flex justify-between items-center mb-4">
-                 <div className="flex items-center space-x-2">
-                     <span className={`relative flex h-3 w-3`}>
-                       <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isSpeaking ? 'bg-green-400' : 'bg-blue-400'}`}></span>
-                       <span className={`relative inline-flex rounded-full h-3 w-3 ${isSpeaking ? 'bg-green-500' : 'bg-blue-500'}`}></span>
-                     </span>
-                     <span className="font-semibold text-sm">
-                        {isConnecting ? "Connecting..." : isSpeaking ? "AI Speaking" : "Listening..."}
-                     </span>
-                 </div>
-                 <button onClick={disconnect} className="text-slate-400 hover:text-white transition-colors">
-                     <X className="w-5 h-5" />
-                 </button>
-             </div>
-             
-             <div className="h-16 bg-slate-800 rounded-lg flex items-center justify-center mb-4 overflow-hidden relative">
-                 {isSpeaking ? (
-                     <div className="flex items-end justify-center space-x-1 h-8">
-                         {[...Array(5)].map((_, i) => (
-                             <div key={i} className="w-1.5 bg-green-400 rounded-full animate-pulse" style={{ height: `${Math.random() * 100}%`, animationDuration: '0.4s' }}></div>
-                         ))}
-                     </div>
-                 ) : (
-                    <div className="flex items-center space-x-2 text-slate-500">
-                        <Radio className="w-5 h-5 animate-pulse" />
-                        <span className="text-xs">Microphone Active</span>
-                    </div>
-                 )}
-             </div>
-
-             <div className="text-xs text-slate-400 text-center border-t border-slate-700 pt-3">
-                 I can see your screen. <br/>
-                 Current Topic: <span className="text-blue-300">{currentInput.topic || 'None'}</span><br/>
-                 Plan Status: <span className="text-blue-300">{currentPlan ? 'Generated' : 'Not started'}</span>
-             </div>
-         </div>
-      )}
-
+    <div className="relative z-50">
       <button
         onClick={isActive ? disconnect : connect}
         disabled={isConnecting}
-        className={`pointer-events-auto flex items-center justify-center w-14 h-14 rounded-full shadow-lg transition-all duration-300 ${
+        className={`p-2 rounded-full transition-all duration-300 flex items-center justify-center ${
             isActive 
-            ? 'bg-red-500 hover:bg-red-600 text-white rotate-0' 
-            : 'bg-blue-600 hover:bg-blue-700 text-white hover:scale-105'
+            ? 'bg-red-100 text-red-600 ring-2 ring-red-500 ring-opacity-50' 
+            : 'hover:bg-slate-100 text-slate-600'
         }`}
+        title={isActive ? "Stop Voice Assistant" : "Start Voice Assistant"}
       >
         {isConnecting ? (
-            <Loader2 className="w-6 h-6 animate-spin" />
+            <Loader2 className="w-5 h-5 animate-spin" />
         ) : isActive ? (
-            <MicOff className="w-6 h-6" />
+            <Mic className="w-5 h-5" />
         ) : (
-            <Mic className="w-6 h-6" />
+            <MicOff className="w-5 h-5" />
         )}
       </button>
+
+      {/* Status Popover */}
+      {(isActive || isConnecting) && (
+         <div className="absolute top-full right-0 mt-3 bg-white text-slate-800 rounded-xl shadow-xl border border-slate-200 w-80 overflow-hidden animate-in slide-in-from-top-2">
+             <div className="bg-slate-50 border-b border-slate-100 p-3 flex justify-between items-center">
+                 <div className="flex items-center space-x-2">
+                     <span className={`relative flex h-2.5 w-2.5`}>
+                       <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isSpeaking ? 'bg-green-400' : 'bg-blue-400'}`}></span>
+                       <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isSpeaking ? 'bg-green-500' : 'bg-blue-500'}`}></span>
+                     </span>
+                     <span className="font-semibold text-xs uppercase tracking-wider text-slate-500">
+                        {isConnecting ? "Connecting..." : isSpeaking ? "AI Speaking" : "Listening..."}
+                     </span>
+                 </div>
+                 <button onClick={disconnect} className="text-slate-400 hover:text-slate-600">
+                     <X className="w-4 h-4" />
+                 </button>
+             </div>
+             
+             <div className="p-4">
+                <div className="h-12 bg-slate-900 rounded-lg flex items-center justify-center overflow-hidden relative shadow-inner">
+                    {isSpeaking ? (
+                        <div className="flex items-end justify-center space-x-1 h-6">
+                            {[...Array(8)].map((_, i) => (
+                                <div key={i} className="w-1 bg-green-400 rounded-full animate-pulse" style={{ height: `${Math.random() * 100}%`, animationDuration: '0.3s' }}></div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="flex items-center space-x-2 text-slate-400">
+                            <Radio className="w-4 h-4 animate-pulse" />
+                            <span className="text-xs">Listening...</span>
+                        </div>
+                    )}
+                </div>
+                
+                <div className="mt-3 text-xs text-slate-500 text-center">
+                    The AI can see your plan and inputs. <br/>Speak to discuss ideas.
+                </div>
+             </div>
+         </div>
+      )}
       
       {error && (
-          <div className="mt-2 bg-red-100 text-red-800 text-xs px-3 py-1 rounded-md border border-red-200 pointer-events-auto">
+          <div className="absolute top-full right-0 mt-2 bg-red-100 text-red-800 text-xs px-3 py-1 rounded-md border border-red-200 whitespace-nowrap">
               {error}
           </div>
       )}

@@ -59,7 +59,7 @@ const App: React.FC = () => {
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
         
         {/* Header */}
-        <header className="bg-white border-b border-slate-200 py-3 px-8 flex items-center justify-between shadow-sm z-10 sticky top-0">
+        <header className="bg-white border-b border-slate-200 py-3 px-8 flex items-center justify-between shadow-sm z-40 sticky top-0">
           <div className="flex items-center">
              <div className="bg-blue-700 p-2 rounded-lg mr-3 shadow-sm">
                  <LayoutDashboard className="w-5 h-5 text-white" />
@@ -69,16 +69,25 @@ const App: React.FC = () => {
                  <p className="text-xs text-slate-500 font-medium">AI-Enhanced Curriculum Design</p>
              </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {selectedStrategy && (
-                <div className="hidden md:flex bg-blue-50 text-blue-700 px-4 py-1.5 rounded-full text-sm font-medium border border-blue-200 items-center shadow-sm">
+                <div className="hidden md:flex bg-blue-50 text-blue-700 px-4 py-1.5 rounded-full text-sm font-medium border border-blue-200 items-center shadow-sm mr-2">
                     <span className="text-blue-400 mr-2 text-xs uppercase tracking-wider font-bold">Strategy:</span>
                     {selectedStrategy.label}
                 </div>
             )}
+            
+            {/* Voice Assistant Button (Stationary in Header) */}
+            <VoiceAssistant 
+                apiKey={process.env.API_KEY || ''} 
+                currentInput={currentFormData}
+                currentPlan={planMarkdown}
+            />
+
+            {/* Text Chat Button */}
             <button 
               onClick={() => setIsChatOpen(true)}
-              className={`p-2 rounded-full transition-colors ${isChatOpen ? 'bg-blue-100 text-blue-600' : 'hover:bg-slate-100 text-slate-600'}`}
+              className={`p-2 rounded-full transition-colors flex items-center justify-center ${isChatOpen ? 'bg-blue-100 text-blue-600' : 'hover:bg-slate-100 text-slate-600'}`}
               title="Open Chat Assistant"
             >
               <MessageSquare className="w-5 h-5" />
@@ -155,13 +164,6 @@ const App: React.FC = () => {
              )}
           </div>
         </main>
-        
-        {/* Voice Assistant Overlay - Positioned Bottom Left relative to this container */}
-        <VoiceAssistant 
-            apiKey={process.env.API_KEY || ''} 
-            currentInput={currentFormData}
-            currentPlan={planMarkdown}
-        />
 
         {/* Text Chat Interface */}
         <ChatInterface 
