@@ -1,3 +1,4 @@
+
 export interface StrategyNode {
   id: string;
   label: string;
@@ -33,6 +34,25 @@ export interface GeneratedPlan {
 export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
+}
+
+export interface LessonVersion {
+    id: string;
+    timestamp: number;
+    markdown: string;
+    strategyIds: string[];
+    description?: string; // e.g., "Generated" or "Refined: Update intro"
+}
+
+export interface SavedPlan {
+    id: string;
+    name: string;
+    createdAt: number;
+    updatedAt: number;
+    data: LessonInput;
+    markdown: string;
+    strategyIds: string[];
+    versions: LessonVersion[];
 }
 
 export enum AppState {

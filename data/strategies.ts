@@ -1,4 +1,48 @@
+
 import { StrategyNode } from '../types';
+
+const cel5dStrategies: StrategyNode[] = [
+  {
+    id: 'cel-purpose',
+    label: 'Purpose',
+    description: 'Standards, learning targets, and teaching points.',
+    fullDefinition: 'Setting clear, standards-based learning targets and teaching points that are communicated to students.',
+    usage: 'Use to ensure the lesson is meaningful, relevant, and based on grade-level standards.',
+    pedagogicalValue: 'Ensures students understand what they are learning, why they are learning it, and how they will know they have learned it.'
+  },
+  {
+    id: 'cel-engagement',
+    label: 'Student Engagement',
+    description: 'Intellectual work, strategies, and talk.',
+    fullDefinition: 'Students engaged in substantive intellectual work, owning their learning through talk and active strategies.',
+    usage: 'Design activities where students do the thinking work (high cognitive demand).',
+    pedagogicalValue: 'Moves locus of control to students; promotes equitable and purposeful participation.'
+  },
+  {
+    id: 'cel-curriculum',
+    label: 'Curriculum & Pedagogy',
+    description: 'Materials, teaching approaches, and scaffolds.',
+    fullDefinition: 'Using instructional materials and approaches that support learning targets and navigate disciplinary habits of thinking.',
+    usage: 'Select scaffolds that support the target concepts and gradually release responsibility.',
+    pedagogicalValue: 'Ensures access for all students through culturally responsive and academically relevant materials.'
+  },
+  {
+    id: 'cel-assessment',
+    label: 'Assessment for Learning',
+    description: 'Self-assessment, feedback, and adjustments.',
+    fullDefinition: 'Using formative assessment to inform instruction and providing feedback to students.',
+    usage: 'Include checks for understanding and opportunities for students to assess their own work.',
+    pedagogicalValue: 'Allows for real-time adjustments to meet student needs and increases student ownership.'
+  },
+  {
+    id: 'cel-environment',
+    label: 'Classroom Environment',
+    description: 'Physical arrangement, routines, and culture.',
+    fullDefinition: 'Creating a culture of inclusivity, equity, and accountability for learning.',
+    usage: 'Plan routines that facilitate student responsibility and independence.',
+    pedagogicalValue: 'Establishes a safe and productive space for risk-taking and collaboration.'
+  }
+];
 
 const questioningStrategies: StrategyNode[] = [
   {
@@ -434,6 +478,12 @@ const paqStrategies: StrategyNode[] = [
 ];
 
 export const strategies: StrategyNode[] = [
+    {
+        id: 'cel-5d-root',
+        label: 'CEL 5D+ Framework',
+        description: 'Instructional Framework for Teaching & Learning',
+        children: cel5dStrategies
+    },
     {
         id: 'questioning-strategies-root',
         label: 'Questioning Strategies',

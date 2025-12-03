@@ -1,3 +1,4 @@
+
 import React, { useRef, useState } from 'react';
 import { LessonInput, StrategyNode, ReferenceFile } from '../types';
 import { Sparkles, Loader2, Upload, Link as LinkIcon, FileText, X, Video, Music, Image as ImageIcon, Plus, Globe } from 'lucide-react';
@@ -136,11 +137,11 @@ export const InputForm: React.FC<InputFormProps> = ({ selectedStrategies, onSubm
                 <Upload className="w-10 h-10" />
             </div>
             <h2 className="text-xl font-bold text-slate-800 mb-2">
-                {isDragging ? 'Drop Files Here' : 'Upload Existing Lesson Plan'}
+                {isDragging ? 'Drop Files Here' : 'Upload Lesson Plan & Materials'}
             </h2>
             <p className="text-slate-500 max-w-md mx-auto mb-6 text-sm">
                 Drag & Drop files here, or click to select.<br/>
-                Supports PDF, Word, Images, Audio & Video.
+                Upload your lesson plan PDF here, along with any supporting images, audio, or video.
             </p>
             
             <button type="button" className={`
@@ -154,7 +155,7 @@ export const InputForm: React.FC<InputFormProps> = ({ selectedStrategies, onSubm
                 ref={fileInputRef}
                 onChange={handleFileChange}
                 multiple
-                accept=".pdf,.doc,.docx,.txt,.html,.md,.ppt,.pptx,image/*,audio/*,video/*"
+                accept=".pdf,.txt,.html,.md,.ppt,.pptx,image/*,audio/*,video/*"
                 className="hidden" 
             />
         </div>
@@ -210,7 +211,7 @@ export const InputForm: React.FC<InputFormProps> = ({ selectedStrategies, onSubm
                             name="subject"
                             value={data.subject}
                             onChange={handleChange}
-                            placeholder="e.g. Science"
+                            placeholder="Enter Subject..."
                             className={inputClasses}
                         />
                     </div>
@@ -221,7 +222,7 @@ export const InputForm: React.FC<InputFormProps> = ({ selectedStrategies, onSubm
                             name="gradeLevel"
                             value={data.gradeLevel}
                             onChange={handleChange}
-                            placeholder="e.g. 5th Grade"
+                            placeholder="Enter Grade Level..."
                             className={inputClasses}
                         />
                     </div>
@@ -235,7 +236,7 @@ export const InputForm: React.FC<InputFormProps> = ({ selectedStrategies, onSubm
                             name="unitName"
                             value={data.unitName}
                             onChange={handleChange}
-                            placeholder="e.g. Ecosystems"
+                            placeholder="Enter Unit Name..."
                             className={inputClasses}
                         />
                     </div>
@@ -246,7 +247,7 @@ export const InputForm: React.FC<InputFormProps> = ({ selectedStrategies, onSubm
                             name="topic"
                             value={data.topic}
                             onChange={handleChange}
-                            placeholder="e.g. Food Webs"
+                            placeholder="Enter Specific Topic..."
                             className={inputClasses}
                         />
                     </div>

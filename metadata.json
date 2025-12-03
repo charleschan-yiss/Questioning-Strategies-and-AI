@@ -1,5 +1,5 @@
 {
-  "name": "Questioning Strategies and AI",
+  "name": "AI Integrated Lesson Planner",
   "description": "A comprehensive lesson planning tool integrating effective questioning strategies and AI assistance.",
   "requestFramePermissions": [
     "microphone"

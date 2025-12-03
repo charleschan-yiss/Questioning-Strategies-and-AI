@@ -1,11 +1,21 @@
+
 import React, { useState } from 'react';
 import { strategies } from '../data/strategies';
-import { StrategyNode } from '../types';
-import { ChevronRight, ChevronDown, BookOpen, Brain, Zap, MessageCircle, CheckSquare, Square, Folder } from 'lucide-react';
+import { SavedPlan, StrategyNode } from '../types';
+import { ChevronRight, ChevronDown, BookOpen, Brain, Zap, MessageCircle, CheckSquare, Square, Folder, ChevronLeft, Menu, FileText, Trash2, Calendar, Layout, FolderOpen, Pencil, Check, X, Info } from 'lucide-react';
 
 interface SidebarProps {
   onToggleStrategy: (id: string) => void;
   selectedIds: string[];
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
+  allowCollapse?: boolean;
+  savedPlans: SavedPlan[];
+  onLoadPlan: (plan: SavedPlan) => void;
+  onDeletePlan: (id: string) => void;
+  onRenamePlan: (id: string, newName: string) => void;
+  currentPlanId: string | null;
+  onNewPlan: () => void;
 }
 
 const getIcon = (id: string) => {
@@ -92,27 +102,203 @@ const TreeNode: React.FC<{
   );
 };
 
-export const Sidebar: React.FC<SidebarProps> = ({ onToggleStrategy, selectedIds }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ 
+    onToggleStrategy, 
+    selectedIds, 
+    isCollapsed, 
+    onToggleCollapse, 
+    allowCollapse = false,
+    savedPlans,
+    onLoadPlan,
+    onDeletePlan,
+    onRenamePlan,
+    currentPlanId,
+    onNewPlan
+}) => {
+  const [activeTab, setActiveTab] = useState<'strategies' | 'plans'>('strategies');
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+
+  const startEditing = (plan: SavedPlan) => {
+    setEditingPlanId(plan.id);
+    setEditName(plan.name);
+  };
+
+  const saveEditing = (id: string) => {
+    if (editName.trim()) {
+        onRenamePlan(id, editName.trim());
+    }
+    setEditingPlanId(null);
+  };
+
+  const cancelEditing = () => {
+    setEditingPlanId(null);
+    setEditName('');
+  };
+
   return (
-    <div className="w-80 bg-white border-r border-slate-200 h-screen flex flex-col flex-shrink-0">
-      <div className="p-4 border-b border-slate-100 bg-slate-50">
-        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Strategy Selection</h2>
-        <p className="text-xs text-slate-500 mt-1">Select one or more methods</p>
+    <div className={`${isCollapsed ? 'w-16' : 'w-80'} bg-white border-r border-slate-200 h-screen flex flex-col flex-shrink-0 transition-all duration-300 ease-in-out`}>
+      
+      {/* Header */}
+      <div className={`p-4 border-b border-slate-100 bg-slate-50 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+        {!isCollapsed && (
+          <div className="flex-1">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Workspace</h2>
+                <button 
+                    onClick={onNewPlan}
+                    className="text-xs bg-white border border-slate-200 hover:border-blue-300 hover:text-blue-600 px-2 py-1 rounded transition-colors"
+                >
+                    + New Plan
+                </button>
+              </div>
+              
+              {/* Tabs */}
+              <div className="flex p-1 bg-slate-200/50 rounded-lg">
+                  <button 
+                    onClick={() => setActiveTab('strategies')}
+                    className={`flex-1 flex items-center justify-center py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'strategies' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                      <Layout className="w-3.5 h-3.5 mr-1.5" /> Strategies
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('plans')}
+                    className={`flex-1 flex items-center justify-center py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'plans' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                      <FolderOpen className="w-3.5 h-3.5 mr-1.5" /> My Plans
+                  </button>
+              </div>
+          </div>
+        )}
+        
+        {allowCollapse && (
+            <button 
+            onClick={onToggleCollapse}
+            className={`p-1.5 rounded-md hover:bg-slate-200 text-slate-500 transition-colors ${isCollapsed ? '' : 'ml-2 self-start'}`}
+            title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            >
+            {isCollapsed ? <Menu className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
+            </button>
+        )}
       </div>
+
+      {/* Content */}
       <div className="flex-1 overflow-y-auto custom-scrollbar py-2">
-        {strategies.map((strategy) => (
-          <TreeNode 
-            key={strategy.id} 
-            node={strategy} 
-            onToggle={onToggleStrategy}
-            selectedIds={selectedIds}
-            level={0}
-          />
-        ))}
+        {!isCollapsed ? (
+          activeTab === 'strategies' ? (
+            strategies.map((strategy) => (
+                <TreeNode 
+                key={strategy.id} 
+                node={strategy} 
+                onToggle={onToggleStrategy}
+                selectedIds={selectedIds}
+                level={0}
+                />
+            ))
+          ) : (
+            // Saved Plans List
+            <div className="px-3 space-y-2">
+                {savedPlans.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400 text-sm">
+                        <FolderOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        No saved plans yet.<br/>Generate and save a plan to see it here.
+                    </div>
+                ) : (
+                    savedPlans.map(plan => (
+                        <div 
+                            key={plan.id}
+                            onClick={() => {
+                                if (editingPlanId !== plan.id) onLoadPlan(plan);
+                            }}
+                            className={`
+                                group p-3 rounded-lg border transition-all cursor-pointer relative min-h-[70px]
+                                ${currentPlanId === plan.id 
+                                    ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-100' 
+                                    : 'bg-white border-slate-100 hover:border-blue-200 hover:shadow-sm'
+                                }
+                            `}
+                        >
+                            {editingPlanId === plan.id ? (
+                                <div className="flex items-center space-x-1" onClick={e => e.stopPropagation()}>
+                                    <input 
+                                        autoFocus
+                                        type="text" 
+                                        value={editName}
+                                        onChange={e => setEditName(e.target.value)}
+                                        className="flex-1 text-sm border border-blue-300 rounded px-2 py-1 outline-none bg-white text-slate-900"
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') saveEditing(plan.id);
+                                            if (e.key === 'Escape') cancelEditing();
+                                        }}
+                                    />
+                                    <button onClick={() => saveEditing(plan.id)} className="p-1 text-green-600 hover:bg-green-50 rounded">
+                                        <Check className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={cancelEditing} className="p-1 text-red-500 hover:bg-red-50 rounded">
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="pr-14">
+                                        <h3 className={`text-sm font-semibold mb-1 truncate ${currentPlanId === plan.id ? 'text-blue-800' : 'text-slate-700'}`}>
+                                            {plan.name}
+                                        </h3>
+                                        <div className="flex items-center text-[10px] text-slate-400 space-x-2">
+                                            <span className="flex items-center">
+                                                <Calendar className="w-3 h-3 mr-1" />
+                                                {new Date(plan.updatedAt).toLocaleDateString()}
+                                            </span>
+                                            {plan.versions.length > 0 && (
+                                                <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
+                                                    v{plan.versions.length}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="absolute top-2 right-2 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 rounded-md">
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); startEditing(plan); }}
+                                            className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-md transition-colors"
+                                            title="Rename Plan"
+                                        >
+                                            <Pencil className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); onDeletePlan(plan.id); }}
+                                            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                                            title="Delete Plan"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    ))
+                )}
+            </div>
+          )
+        ) : (
+          <div className="flex flex-col items-center pt-4 space-y-4">
+             {/* Minimal view when collapsed */}
+          </div>
+        )}
       </div>
-      <div className="p-4 border-t border-slate-200 bg-slate-50 text-xs text-slate-400 text-center">
-        YISS • CEL 5D+ • PAQ
-      </div>
+
+      {/* Footer */}
+      {!isCollapsed && (
+        <div className="p-4 border-t border-slate-200 bg-slate-50 text-xs text-slate-400 flex items-center justify-center">
+            <span>YISS • CEL 5D+ • Biblical Integration</span>
+            <div className="group relative flex items-center ml-2 cursor-pointer">
+                <Info className="w-3.5 h-3.5 text-slate-400 hover:text-blue-500 transition-colors" />
+                <div className="absolute bottom-full mb-2 w-max px-3 py-2 bg-slate-800 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                    Designed & Developed by the Secondary Media Specialist
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 };
