@@ -1,5 +1,7 @@
 {
   "name": "Questioning Strategies and AI",
   "description": "A comprehensive lesson planning tool integrating effective questioning strategies and AI assistance.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "microphone"
+  ]
 }

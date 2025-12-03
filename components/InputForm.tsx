@@ -3,29 +3,30 @@ import { LessonInput, StrategyNode, ReferenceFile } from '../types';
 import { Sparkles, Loader2, Upload, Link as LinkIcon, FileText, X, Video, Music, Image as ImageIcon, Plus, Globe } from 'lucide-react';
 
 interface InputFormProps {
-  selectedStrategy: StrategyNode | null;
+  selectedStrategies: StrategyNode[];
   onSubmit: () => void;
   isLoading: boolean;
   data: LessonInput;
   onChange: (data: LessonInput) => void;
 }
 
-export const InputForm: React.FC<InputFormProps> = ({ selectedStrategy, onSubmit, isLoading, data, onChange }) => {
+export const InputForm: React.FC<InputFormProps> = ({ selectedStrategies, onSubmit, isLoading, data, onChange }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [tempLink, setTempLink] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     onChange({ ...data, [name]: value });
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const newFiles: ReferenceFile[] = [];
+  const processFiles = async (files: FileList) => {
+    const newFiles: ReferenceFile[] = [];
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       
-      for (let i = 0; i < e.target.files.length; i++) {
-        const file = e.target.files[i];
-        
+      try {
         // Simple Base64 conversion
         const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
@@ -42,12 +43,41 @@ export const InputForm: React.FC<InputFormProps> = ({ selectedStrategy, onSubmit
           mimeType: file.type,
           data: base64Data
         });
+      } catch (err) {
+        console.error("Error reading file:", file.name, err);
       }
+    }
 
-      onChange({ ...data, files: [...(data.files || []), ...newFiles] });
-      
+    onChange({ ...data, files: [...(data.files || []), ...newFiles] });
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      await processFiles(e.target.files);
       // Reset input
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      await processFiles(e.dataTransfer.files);
     }
   };
 
@@ -85,27 +115,38 @@ export const InputForm: React.FC<InputFormProps> = ({ selectedStrategy, onSubmit
       {/* PRIMARY UPLOAD SECTION (HERO) */}
       <div 
         onClick={() => fileInputRef.current?.click()}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         className={`
-          group relative bg-white rounded-2xl shadow-sm border-2 border-dashed transition-all duration-300 cursor-pointer mb-6
-          ${data.files && data.files.length > 0 ? 'border-blue-400 bg-blue-50/30' : 'border-slate-300 hover:border-blue-400 hover:shadow-md'}
+          group relative rounded-2xl shadow-sm border-2 border-dashed transition-all duration-300 cursor-pointer mb-6 overflow-hidden
+          ${isDragging 
+            ? 'border-blue-500 bg-blue-50 scale-[1.01] shadow-lg ring-2 ring-blue-200' 
+            : data.files && data.files.length > 0 
+                ? 'border-blue-400 bg-blue-50/30' 
+                : 'border-slate-300 bg-white hover:border-blue-400 hover:shadow-md'
+          }
         `}
       >
-        <div className="p-10 flex flex-col items-center justify-center text-center">
+        <div className="p-10 flex flex-col items-center justify-center text-center relative z-10">
             <div className={`
                 p-4 rounded-full mb-4 transition-transform duration-300 group-hover:scale-110
-                ${data.files && data.files.length > 0 ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600'}
+                ${isDragging ? 'bg-blue-200 text-blue-700 scale-110' : (data.files && data.files.length > 0 ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600')}
             `}>
                 <Upload className="w-10 h-10" />
             </div>
             <h2 className="text-xl font-bold text-slate-800 mb-2">
-                Upload Existing Lesson Plan
+                {isDragging ? 'Drop Files Here' : 'Upload Existing Lesson Plan'}
             </h2>
             <p className="text-slate-500 max-w-md mx-auto mb-6 text-sm">
-                Have a PDF, Word doc, or slide deck? Upload it here. <br/>
-                The AI will analyze your file to apply the questioning strategies.
+                Drag & Drop files here, or click to select.<br/>
+                Supports PDF, Word, Images, Audio & Video.
             </p>
             
-            <button type="button" className="bg-white border border-slate-300 text-slate-700 font-medium py-2 px-6 rounded-lg shadow-sm group-hover:border-blue-400 group-hover:text-blue-600 transition-colors z-10">
+            <button type="button" className={`
+                font-medium py-2 px-6 rounded-lg shadow-sm transition-colors z-10
+                ${isDragging ? 'bg-blue-600 text-white border-transparent' : 'bg-white border border-slate-300 text-slate-700 group-hover:border-blue-400 group-hover:text-blue-600'}
+            `}>
                 Select Files
             </button>
             <input 
@@ -116,14 +157,11 @@ export const InputForm: React.FC<InputFormProps> = ({ selectedStrategy, onSubmit
                 accept=".pdf,.doc,.docx,.txt,.html,.md,.ppt,.pptx,image/*,audio/*,video/*"
                 className="hidden" 
             />
-             <p className="text-xs text-slate-400 mt-4">
-                Supports: PDF, DOCX, Images, Audio, Video
-            </p>
         </div>
 
         {/* File Preview List inside Hero */}
         {data.files && data.files.length > 0 && (
-            <div className="bg-white border-t border-slate-200 p-4 rounded-b-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white border-t border-slate-200 p-4 rounded-b-2xl relative z-20" onClick={(e) => e.stopPropagation()}>
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 pl-1">Attached Files ({data.files.length})</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {data.files.map((file, idx) => (
@@ -293,9 +331,9 @@ export const InputForm: React.FC<InputFormProps> = ({ selectedStrategy, onSubmit
       {/* GENERATE BUTTON */}
       <button 
           onClick={onSubmit}
-          disabled={isLoading || !selectedStrategy}
+          disabled={isLoading || selectedStrategies.length === 0}
           className={`w-full flex justify-center items-center py-4 px-6 rounded-xl text-white font-bold text-lg transition-all transform duration-200
-              ${isLoading || !selectedStrategy 
+              ${isLoading || selectedStrategies.length === 0
                   ? 'bg-slate-300 cursor-not-allowed' 
                   : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg hover:shadow-xl hover:-translate-y-0.5'
               }
@@ -306,14 +344,14 @@ export const InputForm: React.FC<InputFormProps> = ({ selectedStrategy, onSubmit
                   <Loader2 className="w-6 h-6 mr-3 animate-spin" />
                   Analyzing & Generating Plan...
               </>
-          ) : !selectedStrategy ? (
+          ) : selectedStrategies.length === 0 ? (
               <span className="flex items-center">
-                  Select a Strategy from Sidebar to Begin
+                  Select at least one Strategy to Begin
               </span>
           ) : (
               <span className="flex items-center">
                   <Sparkles className="w-5 h-5 mr-2" />
-                  Generate Plan with {selectedStrategy.label}
+                  Generate Plan with {selectedStrategies.length} Strateg{selectedStrategies.length === 1 ? 'y' : 'ies'}
               </span>
           )}
       </button>

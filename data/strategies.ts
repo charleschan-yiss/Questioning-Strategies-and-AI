@@ -1,6 +1,6 @@
 import { StrategyNode } from '../types';
 
-export const strategies: StrategyNode[] = [
+const questioningStrategies: StrategyNode[] = [
   {
     id: 'general-strategies',
     label: 'General Strategies',
@@ -404,4 +404,46 @@ export const strategies: StrategyNode[] = [
       }
     ]
   }
+];
+
+const paqStrategies: StrategyNode[] = [
+    {
+        id: 'paq-p',
+        label: 'P - Purpose',
+        description: 'Establishing the divine intent.',
+        fullDefinition: 'Establishing the divine intent for the specific subject matter or topic. Answers "Why does this exist?" or "What foundational truth governs this aspect of reality?"',
+        usage: 'Must occur at the beginning of the unit or lesson. The teacher presents a foundational truth, and the student must deduce how that truth applies to the topic.',
+        pedagogicalValue: 'Acts as a "measuring rod." All subsequent academic content is compared against this truth. Moves student from passive to active deduction.'
+    },
+    {
+        id: 'paq-a',
+        label: 'A - Assumptions',
+        description: 'The Logic Check / Worldview Analysis.',
+        fullDefinition: 'Uncovering and evaluating the worldview beliefs (historical, philosophical, or theological) hidden within the textbook or curriculum.',
+        usage: 'Best situated in the middle of the unit. Students identify a claim or "unspoken belief" and compare it against the foundational truth.',
+        pedagogicalValue: 'Teaches discernment. Acts as a "Compare and Contrast" mechanism for deep structural integration rather than surface level agreement.'
+    },
+    {
+        id: 'paq-q',
+        label: 'Q - Questions',
+        description: 'The Ethical Application.',
+        fullDefinition: 'Using "Essential Questions" to provoke ethical reasoning, value judgments, or personal application.',
+        usage: 'Can occur throughout the unit. Answering questions that require them to apply the content to their own life, decision-making, or ethical framework.',
+        pedagogicalValue: 'Moves knowledge from the "head" (intellect) to the "heart and hands" (behavior).'
+    }
+];
+
+export const strategies: StrategyNode[] = [
+    {
+        id: 'questioning-strategies-root',
+        label: 'Questioning Strategies',
+        description: 'Methods to facilitate dialogue and thinking.',
+        children: questioningStrategies
+    },
+    {
+        id: 'paq-method-root',
+        label: 'Biblical Integration (PAQ)',
+        description: 'Purpose, Assumptions, Questions Method.',
+        children: paqStrategies
+    }
 ];
