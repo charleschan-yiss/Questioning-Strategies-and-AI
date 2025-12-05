@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { StrategyNode } from '../types';
-import { Info, BookOpen, Lightbulb, GraduationCap, Layout } from 'lucide-react';
+import { Info, BookOpen, Lightbulb, Layout, MessageCircle, Users } from 'lucide-react';
 
 export const StrategyInfo: React.FC<{ strategies: StrategyNode[] }> = ({ strategies }) => {
   // Filter out nodes that don't have detail info (like root folders if accidentally passed)
@@ -25,7 +25,7 @@ export const StrategyInfo: React.FC<{ strategies: StrategyNode[] }> = ({ strateg
   const activeStrategy = validStrategies.find(s => s.id === activeId) || validStrategies[0];
 
   return (
-    <div className="mb-8 animate-in fade-in slide-in-from-top-4 duration-500 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+    <div className="mb-8 animate-in fade-in slide-in-from-top-4 duration-500 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden w-full max-w-full">
       
       {/* Header / Tabs */}
       <div className="bg-slate-50 border-b border-slate-200 p-2 flex items-center gap-2 overflow-x-auto custom-scrollbar">
@@ -53,48 +53,87 @@ export const StrategyInfo: React.FC<{ strategies: StrategyNode[] }> = ({ strateg
       {/* Active Content Body */}
       {activeStrategy && (
         <div className="p-6">
-            <div className="flex items-start mb-6">
-                <div className="bg-blue-100 p-3 rounded-full mr-4 flex-shrink-0">
-                    <BookOpen className="w-6 h-6 text-blue-700" />
-                </div>
-                <div>
-                    <h2 className="text-xl font-bold text-slate-900">{activeStrategy.label}</h2>
-                    <p className="text-slate-500 text-base mt-1">{activeStrategy.description}</p>
+            <div className="flex items-start justify-between mb-6">
+                <div className="flex items-start">
+                    <div className="bg-blue-100 p-3 rounded-full mr-4 flex-shrink-0">
+                        <BookOpen className="w-6 h-6 text-blue-700" />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-900">{activeStrategy.label}</h2>
+                        <p className="text-slate-500 text-base mt-1">{activeStrategy.description}</p>
+                    </div>
                 </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
                 {activeStrategy.fullDefinition && (
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                     <h3 className="text-xs font-bold text-blue-600 uppercase tracking-widest flex items-center">
-                    <Info className="w-4 h-4 mr-2" /> Definition
+                    <Info className="w-4 h-4 mr-2" /> Steps / Definition
                     </h3>
-                    <p className="text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100 text-sm h-full">
+                    <div className="text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100 text-sm h-full break-words whitespace-pre-wrap">
                         {activeStrategy.fullDefinition}
-                    </p>
+                    </div>
                 </div>
                 )}
                 
                 {activeStrategy.usage && (
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                     <h3 className="text-xs font-bold text-blue-600 uppercase tracking-widest flex items-center">
                     <Lightbulb className="w-4 h-4 mr-2" /> Application
                     </h3>
-                    <p className="text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100 text-sm h-full">
+                    <div className="text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100 text-sm h-full break-words whitespace-pre-wrap">
                         {activeStrategy.usage}
-                    </p>
+                    </div>
                 </div>
                 )}
             </div>
 
-            {activeStrategy.pedagogicalValue && (
-                <div className="mt-6 pt-6 border-t border-slate-100">
-                <h3 className="text-xs font-bold text-green-600 uppercase tracking-widest mb-3 flex items-center">
-                    <GraduationCap className="w-4 h-4 mr-2" /> Pedagogical Value
-                </h3>
-                <div className="flex items-start bg-green-50 p-4 rounded-lg border border-green-100 text-green-900 text-sm">
-                    <span className="italic font-medium">"{activeStrategy.pedagogicalValue}"</span>
+            {(activeStrategy.optionA || activeStrategy.optionB) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 w-full">
+                    <div className="space-y-2 min-w-0">
+                        <h3 className="text-xs font-bold text-indigo-600 uppercase tracking-widest flex items-center">
+                        Option A: Academic
+                        </h3>
+                        <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100 text-indigo-900 text-sm h-full break-words whitespace-pre-wrap">
+                            {activeStrategy.optionA}
+                        </div>
+                    </div>
+                    
+                    <div className="space-y-2 min-w-0">
+                        <h3 className="text-xs font-bold text-pink-600 uppercase tracking-widest flex items-center">
+                        Option B: Social/Fun
+                        </h3>
+                        <div className="bg-pink-50 p-4 rounded-lg border border-pink-100 text-pink-900 text-sm h-full break-words whitespace-pre-wrap">
+                            {activeStrategy.optionB}
+                        </div>
+                    </div>
                 </div>
+            )}
+
+            {(activeStrategy.teacherScript || activeStrategy.socialSkill) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 w-full">
+                    {activeStrategy.teacherScript && (
+                        <div className="space-y-2 min-w-0 overflow-hidden">
+                            <h3 className="text-xs font-bold text-purple-600 uppercase tracking-widest flex items-center">
+                            <MessageCircle className="w-4 h-4 mr-2" /> Teacher Script
+                            </h3>
+                            <div className="bg-purple-50 p-4 rounded-lg border border-purple-100 text-purple-900 text-sm italic h-full break-words whitespace-pre-wrap w-full">
+                                "{activeStrategy.teacherScript}"
+                            </div>
+                        </div>
+                    )}
+                    
+                    {activeStrategy.socialSkill && (
+                        <div className="space-y-2 min-w-0 overflow-hidden">
+                            <h3 className="text-xs font-bold text-teal-600 uppercase tracking-widest flex items-center">
+                            <Users className="w-4 h-4 mr-2" /> Social Skill
+                            </h3>
+                            <div className="bg-teal-50 p-4 rounded-lg border border-teal-100 text-teal-900 text-sm h-full break-words whitespace-pre-wrap w-full">
+                                {activeStrategy.socialSkill}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

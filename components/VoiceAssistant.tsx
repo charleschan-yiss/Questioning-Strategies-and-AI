@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
-import { Mic, MicOff, X, Loader2, Radio, MessageSquare, Copy, Check, VolumeX, Volume2, AlertCircle, Trash2 } from 'lucide-react';
+import { GoogleGenAI, LiveServerMessage } from "@google/genai";
+import { Mic, MicOff, X, Loader2, MessageSquare, Copy, Check, VolumeX, AlertCircle, Trash2 } from 'lucide-react';
 import { LessonInput } from '../types';
 
 interface VoiceAssistantProps {
@@ -21,39 +21,29 @@ interface TranscriptItem {
 export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentInput, currentPlan, currentPlanId }) => {
   const [isActive, setIsActive] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [isMuted, setIsMuted] = useState(false); // User mic mute state
+  const [isMuted, setIsMuted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   
-  // Transcript State
   const [transcripts, setTranscripts] = useState<TranscriptItem[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Audio Context Refs
   const audioContextRef = useRef<AudioContext | null>(null);
   const inputContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   
-  // Session Refs
   const sessionPromiseRef = useRef<Promise<any> | null>(null);
   const currentSessionRef = useRef<any>(null);
 
-  // Audio Playback State
   const nextStartTimeRef = useRef<number>(0);
   const scheduledSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
-
-  // Track previous plan length to detect generation events
   const prevPlanRef = useRef<string>("");
-  
-  // Keep alive interval
   const keepAliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Persistence Key
   const storageKey = `yiss_voice_chat_${currentPlanId || 'draft'}`;
 
-  // Load chat history when switching plans
   useEffect(() => {
     const saved = localStorage.getItem(storageKey);
     if (saved) {
@@ -68,7 +58,6 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
     }
   }, [currentPlanId, storageKey]);
 
-  // Auto-save chat history on change
   useEffect(() => {
     if (transcripts.length > 0) {
         localStorage.setItem(storageKey, JSON.stringify(transcripts));
@@ -85,13 +74,11 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
   const cleanupAudio = () => {
     if (keepAliveRef.current) clearInterval(keepAliveRef.current);
 
-    // Stop all scheduled sources
     scheduledSourcesRef.current.forEach(source => {
       try { source.stop(); } catch (e) {}
     });
     scheduledSourcesRef.current.clear();
 
-    // Close inputs
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
@@ -105,7 +92,6 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
       sourceRef.current = null;
     }
     
-    // Close contexts
     if (inputContextRef.current) {
       try { inputContextRef.current.close(); } catch(e) {}
       inputContextRef.current = null;
@@ -115,7 +101,6 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
       audioContextRef.current = null;
     }
 
-    // Close session
     if (currentSessionRef.current) {
         currentSessionRef.current = null;
     }
@@ -125,16 +110,13 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
   const connect = async () => {
     setIsConnecting(true);
     setError(null);
-    // DO NOT CLEAR TRANSCRIPTS HERE to preserve history
     setIsMuted(false);
 
     try {
-      // 1. Initialize Audio Contexts immediately on user gesture
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       const inputCtx = new AudioContextClass();
       const outputCtx = new AudioContextClass();
       
-      // Resume immediately to unlock audio on browsers like Chrome/Safari
       await inputCtx.resume();
       await outputCtx.resume();
 
@@ -142,27 +124,20 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
       audioContextRef.current = outputCtx;
       nextStartTimeRef.current = 0;
       
-      const inputRate = inputCtx.sampleRate;
-
-      // 2. Request Mic Permission explicitly first to catch denial early
       if (!navigator.mediaDevices) {
           throw new Error("Microphone access not supported in this browser.");
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      // 3. Connect to API
       const ai = new GoogleGenAI({ apiKey });
       
-      // Start Keep-Alive to prevent AudioContext suspension
       keepAliveRef.current = setInterval(() => {
          if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
              audioContextRef.current.resume();
          }
       }, 1000);
 
-      // PREPARE HISTORY FOR CONTEXT
-      // Limit to last 10 messages to avoid context overflow, although models handle large context well.
       const historyContext = transcripts.slice(-10).map(t => 
         `${t.role === 'agent' ? 'AI' : 'TEACHER'}: ${t.text}`
       ).join('\n');
@@ -177,29 +152,17 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
         - Topic: ${currentInput.topic || '(Empty)'}
         - Grade Level: ${currentInput.gradeLevel || '(Empty)'}
         - Subject: ${currentInput.subject || '(Empty)'}
-        - Standards: ${currentInput.standards || '(Empty)'}
-        - Context Notes: ${currentInput.context || '(Empty)'}
         
-        LESSON PLAN STATUS:
-        ${currentPlan ? "A full lesson plan is currently displayed on screen." : "No lesson plan has been generated yet; the teacher is in the planning phase."}
-        ${currentPlan ? `CONTENT OF GENERATED PLAN:\n${currentPlan}` : ""}
-
-        PREVIOUS CONVERSATION HISTORY (Context for continuity):
+        PREVIOUS CONVERSATION HISTORY:
         ${historyContext ? historyContext : "(No previous conversation)"}
-
-        INSTRUCTIONS:
-        1. Keep responses concise, conversational, and encouraging.
-        2. If the user asks about the plan, refer to the "CONTENT OF GENERATED PLAN" section above.
-        3. If the user asks for text to copy (e.g. "Write that down"), dictate it clearly. Your response is being transcribed so the user can see it.
       `;
 
       sessionPromiseRef.current = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         config: {
-          responseModalities: [Modality.AUDIO],
-          // CORRECTED CONFIGURATION
-          outputAudioTranscription: {}, // Must be empty object to enable, no model name
-          systemInstruction: systemContext, // Must be string, not object
+          responseModalities: ['AUDIO'],
+          outputAudioTranscription: {}, 
+          systemInstruction: systemContext,
           speechConfig: {
             voiceConfig: {
               prebuiltVoiceConfig: {
@@ -224,7 +187,6 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
             processorRef.current = processor;
 
             processor.onaudioprocess = (e) => {
-              // MUTE LOGIC: If muted, send silence or nothing
               if (isMuted) return;
 
               const inputData = e.inputBuffer.getChannelData(0);
@@ -244,12 +206,14 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
 
               if (sessionPromiseRef.current) {
                 sessionPromiseRef.current.then(session => {
-                   session.sendRealtimeInput({
-                      media: {
-                        mimeType: `audio/pcm;rate=${inputRate}`,
-                        data: b64Data
-                      }
-                   });
+                   if (inputContextRef.current) {
+                       session.sendRealtimeInput({
+                          media: {
+                            mimeType: `audio/pcm;rate=${inputContextRef.current.sampleRate}`,
+                            data: b64Data
+                          }
+                       });
+                   }
                 });
               }
             };
@@ -258,7 +222,6 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
             processor.connect(inputContextRef.current.destination);
           },
           onmessage: async (msg: LiveServerMessage) => {
-            // HANDLE AUDIO OUTPUT
             const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
             if (audioData && audioContextRef.current) {
               setIsSpeaking(true);
@@ -302,24 +265,20 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
               };
             }
 
-            // HANDLE TEXT TRANSCRIPTION
             const outputTranscription = msg.serverContent?.outputTranscription?.text;
             if (outputTranscription) {
                 setTranscripts(prev => {
                     const last = prev[prev.length - 1];
-                    // If the last message was an agent partial, append to it
                     if (last && last.role === 'agent' && last.isPartial) {
                         return [
                             ...prev.slice(0, -1),
-                            { ...last, text: last.text + outputTranscription, isPartial: true } // still streaming
+                            { ...last, text: last.text + outputTranscription, isPartial: true } 
                         ];
                     }
-                    // Otherwise start new bubble
                     return [...prev, { id: Date.now().toString(), role: 'agent', text: outputTranscription, isPartial: true }];
                 });
             }
 
-            // Mark turn complete
             if (msg.serverContent?.turnComplete) {
                 setTranscripts(prev => {
                     const last = prev[prev.length - 1];
@@ -345,7 +304,6 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
           },
           onerror: (err) => {
             console.error("Session error", err);
-            // Distinguish between mic denial and API/other errors if possible
             if (err.toString().includes('NotFoundError') || err.toString().includes('NotAllowedError')) {
                 setError("Microphone permission denied.");
             } else {
@@ -361,11 +319,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
 
     } catch (e: any) {
       console.error(e);
-      let errMsg = "Failed to start audio";
-      if (e.message?.includes('denied') || e.name === 'NotAllowedError') {
-          errMsg = "Microphone permission denied.";
-      }
-      setError(errMsg);
+      setError("Failed to start audio");
       setIsConnecting(false);
       cleanupAudio();
     }
@@ -380,17 +334,15 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
       setIsMuted(!isMuted);
   };
   
-  // Ref for mute state to be accessible inside the audio callback closure
   const isMutedRef = useRef(isMuted);
   useEffect(() => {
       isMutedRef.current = isMuted;
   }, [isMuted]);
 
-  // Update the processor logic to use the ref
   useEffect(() => {
       if (processorRef.current) {
           processorRef.current.onaudioprocess = (e) => {
-            if (isMutedRef.current) return; // Muted
+            if (isMutedRef.current) return; 
 
             const inputData = e.inputBuffer.getChannelData(0);
             const pcmData = new Int16Array(inputData.length);
@@ -409,7 +361,6 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
 
             if (sessionPromiseRef.current) {
                 sessionPromiseRef.current.then(session => {
-                    // Re-check rate inside
                     if (inputContextRef.current) {
                          session.sendRealtimeInput({
                             media: {
@@ -468,7 +419,6 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
             <MicOff className="w-5 h-5" />
         )}
         
-        {/* Status Indicator Dot */}
         {isActive && (
             <span className="absolute -top-1 -right-1 flex h-3 w-3">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -477,11 +427,8 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
         )}
       </button>
 
-      {/* Expanded Status Popover with Chat Log */}
       {(isActive || isConnecting) && (
-         <div className="absolute top-full right-0 mt-3 bg-white text-slate-800 rounded-xl shadow-2xl border border-slate-200 w-96 overflow-hidden animate-in slide-in-from-top-2 flex flex-col max-h-[600px] ring-1 ring-slate-900/5">
-             
-             {/* Header */}
+         <div className="absolute top-full right-0 mt-3 bg-white text-slate-800 rounded-xl shadow-2xl border border-slate-200 w-96 overflow-hidden animate-in slide-in-from-top-2 flex flex-col max-h-[calc(100vh-200px)] z-[100] ring-1 ring-slate-900/5">
              <div className={`p-4 border-b border-slate-100 flex justify-between items-center flex-shrink-0 transition-colors ${isConnecting ? 'bg-blue-50' : isSpeaking ? 'bg-green-50' : 'bg-white'}`}>
                  <div className="flex items-center space-x-3">
                      {isConnecting ? (
@@ -526,9 +473,8 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
                  </div>
              </div>
              
-             {/* Visualizer / Waveform (Placeholder for active state) */}
              {!isConnecting && (
-                 <div className="h-16 bg-slate-50 border-b border-slate-100 flex items-center justify-center relative overflow-hidden">
+                 <div className="h-16 bg-slate-50 border-b border-slate-100 flex items-center justify-center relative overflow-hidden flex-shrink-0">
                      {isSpeaking ? (
                          <div className="flex items-center space-x-1">
                              {[...Array(20)].map((_, i) => (
@@ -555,8 +501,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
                  </div>
              )}
              
-             {/* Transcript Area */}
-             <div className="flex-1 overflow-y-auto p-4 bg-white min-h-[200px] custom-scrollbar space-y-4">
+             <div className="flex-1 overflow-y-auto p-4 bg-white custom-scrollbar space-y-4">
                 {transcripts.length === 0 && !isConnecting ? (
                     <div className="flex flex-col items-center justify-center h-full text-slate-300 space-y-2 py-8">
                         <MessageSquare className="w-8 h-8 opacity-20" />
@@ -596,7 +541,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
       )}
       
       {error && (
-          <div className="absolute top-full right-0 mt-2 bg-red-100 text-red-800 text-xs px-3 py-2 rounded-lg border border-red-200 whitespace-nowrap shadow-lg flex items-center animate-in fade-in slide-in-from-top-1">
+          <div className="absolute top-full right-0 mt-2 bg-red-100 text-red-800 text-xs px-3 py-2 rounded-lg border border-red-200 whitespace-nowrap shadow-lg flex items-center animate-in fade-in slide-in-from-top-1 z-[100]">
               <AlertCircle className="w-3 h-3 mr-2" />
               {error}
           </div>

@@ -1,8 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { strategies } from '../data/strategies';
 import { SavedPlan, StrategyNode } from '../types';
-import { ChevronRight, ChevronDown, BookOpen, Brain, Zap, MessageCircle, CheckSquare, Square, Folder, ChevronLeft, Menu, FileText, Trash2, Calendar, Layout, FolderOpen, Pencil, Check, X, Info } from 'lucide-react';
+import { ChevronRight, ChevronDown, BookOpen, Brain, Zap, MessageCircle, CheckSquare, Square, Folder, ChevronLeft, Menu, FileText, Trash2, Calendar, Layout, FolderOpen, Pencil, Check, X, Info, Download, Upload } from 'lucide-react';
 
 interface SidebarProps {
   onToggleStrategy: (id: string) => void;
@@ -16,6 +16,7 @@ interface SidebarProps {
   onRenamePlan: (id: string, newName: string) => void;
   currentPlanId: string | null;
   onNewPlan: () => void;
+  onImportPlan: (plan: SavedPlan) => void;
 }
 
 const getIcon = (id: string) => {
@@ -113,11 +114,41 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onDeletePlan,
     onRenamePlan,
     currentPlanId,
-    onNewPlan
+    onNewPlan,
+    onImportPlan
 }) => {
   const [activeTab, setActiveTab] = useState<'strategies' | 'plans'>('strategies');
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  
+  // Resizable logic
+  const [sidebarWidth, setSidebarWidth] = useState(320);
+  const isResizingRef = useRef(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  const startResizing = () => {
+      isResizingRef.current = true;
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', stopResizing);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none'; // Prevent text selection
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      const newWidth = e.clientX;
+      if (newWidth > 200 && newWidth < 600) {
+          setSidebarWidth(newWidth);
+      }
+  };
+
+  const stopResizing = () => {
+      isResizingRef.current = false;
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', stopResizing);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+  };
 
   const startEditing = (plan: SavedPlan) => {
     setEditingPlanId(plan.id);
@@ -136,8 +167,54 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setEditName('');
   };
 
+  const handleExportPlan = (plan: SavedPlan) => {
+      const dataStr = JSON.stringify(plan, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${plan.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.yiss.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+  };
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const handleImportClick = () => {
+      fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          try {
+              const json = JSON.parse(event.target?.result as string);
+              // Basic validation
+              if (json.id && json.name && json.data) {
+                  onImportPlan(json);
+              } else {
+                  alert("Invalid lesson plan file.");
+              }
+          } catch (error) {
+              console.error("Error parsing JSON", error);
+              alert("Failed to import plan.");
+          }
+      };
+      reader.readAsText(file);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   return (
-    <div className={`${isCollapsed ? 'w-16' : 'w-80'} bg-white border-r border-slate-200 h-screen flex flex-col flex-shrink-0 transition-all duration-300 ease-in-out`}>
+    <div 
+        ref={sidebarRef}
+        className="bg-white border-r border-slate-200 h-screen flex flex-col flex-shrink-0 transition-all duration-75 ease-linear relative"
+        style={{ width: isCollapsed ? '4rem' : `${sidebarWidth}px` }}
+    >
       
       {/* Header */}
       <div className={`p-4 border-b border-slate-100 bg-slate-50 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
@@ -198,6 +275,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ) : (
             // Saved Plans List
             <div className="px-3 space-y-2">
+                <div className="flex justify-end mb-2">
+                    <button 
+                        onClick={handleImportClick}
+                        className="flex items-center text-xs text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-1 rounded border border-blue-100"
+                    >
+                        <Upload className="w-3 h-3 mr-1" /> Import JSON
+                    </button>
+                    <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
+                </div>
+
                 {savedPlans.length === 0 ? (
                     <div className="text-center py-8 text-slate-400 text-sm">
                         <FolderOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -259,6 +346,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                     
                                     <div className="absolute top-2 right-2 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 rounded-md">
                                         <button 
+                                            onClick={(e) => { e.stopPropagation(); handleExportPlan(plan); }}
+                                            className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors"
+                                            title="Export JSON"
+                                        >
+                                            <Download className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button 
                                             onClick={(e) => { e.stopPropagation(); startEditing(plan); }}
                                             className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-md transition-colors"
                                             title="Rename Plan"
@@ -286,6 +380,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
       </div>
+
+      {/* Drag Handle */}
+      {!isCollapsed && (
+          <div 
+            onMouseDown={startResizing}
+            className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400 transition-colors z-50 group"
+          >
+              <div className="w-px h-full bg-slate-200 group-hover:bg-blue-300 mx-auto"></div>
+          </div>
+      )}
 
       {/* Footer */}
       {!isCollapsed && (

@@ -1,6 +1,628 @@
 
 import { StrategyNode } from '../types';
 
+// --- KAGAN STRUCTURES DATABASE ---
+
+const kaganReview: StrategyNode[] = [
+  {
+    id: 'kagan-fan-n-pick',
+    label: 'Fan-N-Pick',
+    description: 'Teammates play a card game to respond to questions.',
+    fullDefinition: '1) Student 1 (Fan) holds cards in a fan. 2) Student 2 (Pick) picks a card, reads aloud, waits 5s. 3) Student 3 (Answer) answers. 4) Student 4 (Praise/Coach) checks/praises. 5) Rotate.',
+    usage: 'Use for reviewing content, vocabulary, or math facts.',
+    pedagogicalValue: 'Promotes autonomy. The roles lower anxiety while the Praise/Coach role deepens understanding.',
+    socialSkill: 'Coaching without giving the answer; accepting feedback.',
+    teacherScript: 'Student 1, fan them out! Student 4, listen closely—give a hint, not the answer.'
+  },
+  {
+    id: 'kagan-fan-n-pick-partners',
+    label: 'Fan-N-Pick Partners',
+    description: 'Paired version of Fan-N-Pick.',
+    fullDefinition: 'Same as Fan-N-Pick but with 2 students. Partner A fans; B picks/answers; A praises/coaches. Switch.',
+    usage: 'Doubles the practice frequency compared to the team version.',
+    pedagogicalValue: 'High engagement dyadic practice.',
+    socialSkill: 'Patience and immediate validation.',
+    teacherScript: 'Partner A, you are the Fanner. Partner B, you are the Picker. Go!'
+  },
+  {
+    id: 'kagan-dip-a-strip',
+    label: 'Dip-A-Strip',
+    description: 'Picking question strips from a bundle.',
+    fullDefinition: '1) Student A holds a bundle of strips fanned like a bouquet. 2) Student B "dips" (pulls) one strip, reads, answers. 3) Student A checks/praises.',
+    usage: 'Adds tactile novelty to simple Q&A. Good for vocab or math facts.',
+    pedagogicalValue: 'Novelty increases attention.',
+    teacherScript: 'Don\'t look! Just dip and pick a strip.'
+  },
+  {
+    id: 'kagan-flashcard-star',
+    label: 'Flashcard Star',
+    description: 'Building a pile of mastered cards.',
+    fullDefinition: '1) Pair uses flashcards. 2) A shows front. B answers. 3) If correct, card goes to "Star Pile". If wrong, A shows back, coaches, returns to deck.',
+    usage: 'Memorization and fact fluency.',
+    pedagogicalValue: 'Visual tracking of mastery builds motivation.',
+    socialSkill: 'Honesty (don\'t put it in the star pile unless it was perfect).',
+    teacherScript: 'Let\'s see which pair can build the biggest Star Pile!'
+  },
+  {
+    id: 'kagan-numbered-heads',
+    label: 'Numbered Heads Together',
+    description: 'Team consensus then individual answer.',
+    fullDefinition: '1) Teacher asks question. 2) Silent write. 3) "Heads Together" to agree. 4) Teacher calls "Number 3!". 5) Number 3s stand and answer.',
+    usage: 'Reviewing complex concepts where verification is needed.',
+    pedagogicalValue: 'Prevents "hitchhiking". High individual accountability.',
+    socialSkill: 'Consensus seeking; ensuring the lowest achiever is ready.',
+    teacherScript: 'Put your heads together! Make sure your Number 1 and Number 4 both know the answer.'
+  },
+  {
+    id: 'kagan-paired-heads',
+    label: 'Paired Heads Together',
+    description: 'Numbered Heads but in pairs.',
+    fullDefinition: 'Same as Numbered Heads but in pairs. Teacher calls "Partner A" or "Partner B".',
+    usage: 'High intensity review.',
+    pedagogicalValue: 'No place to hide; intense active listening.',
+    socialSkill: 'Intense active listening.',
+    teacherScript: 'Partner A, make sure Partner B is ready to answer for you!'
+  },
+  {
+    id: 'kagan-traveling-heads',
+    label: 'Traveling Heads Together',
+    description: 'Numbered heads with movement.',
+    fullDefinition: '1) Teams solve problem. 2) Teacher calls a number. 3) That student travels to a NEW team to share the answer.',
+    usage: 'Calibrating answers across the class.',
+    pedagogicalValue: 'Prevents teams from reinforcing wrong data.',
+    socialSkill: 'Presenting to strangers (public speaking confidence).',
+    teacherScript: 'Number 2s, travel! Go to the table on your right and share your team\'s answer.'
+  },
+  {
+    id: 'kagan-quiz-quiz-trade',
+    label: 'Quiz-Quiz-Trade',
+    description: ' mingle, quiz partner, trade cards.',
+    fullDefinition: '1) Stand Up, Hand Up, Pair Up. 2) Partner A quizzes B. 3) B answers. A praises/coaches. 4) Switch roles. 5) Trade cards and find a new partner.',
+    usage: 'Energizer and review.',
+    pedagogicalValue: 'Repetition of their own card helps mastery before trading.',
+    socialSkill: 'Greeting new partners; parting with a "Thank you."',
+    teacherScript: 'Stand up, hand up, pair up! Quiz your partner, trade cards, and find someone new.'
+  },
+  {
+    id: 'kagan-quiz-n-compare',
+    label: 'Quiz-N-Compare',
+    description: 'Pairs generate answer then check with neighbors.',
+    fullDefinition: '1) Teacher asks question. 2) Pairs generate answer. 3) Pairs check with a neighboring pair (Quad Check).',
+    usage: 'Validating thinking on open-ended questions.',
+    pedagogicalValue: 'If pairs disagree, it sparks deep analysis to find the truth.',
+    socialSkill: 'Politeness in disagreement.',
+    teacherScript: 'Turn to your neighbors. Do you have the same answer? If not, figure out who is right.'
+  },
+  {
+    id: 'kagan-rally-quiz',
+    label: 'Rally Quiz',
+    description: 'Partners quiz each other with text/worksheet.',
+    fullDefinition: '1) Partners have a text. 2) A asks B a question. B answers (no looking). 3) A checks. 4) Switch.',
+    usage: 'High-speed memory check.',
+    pedagogicalValue: 'Immediate feedback.',
+    socialSkill: 'Trust (not peeking).',
+    teacherScript: 'Partner A, hide the answer key. Partner B, eyes on me!'
+  },
+  {
+    id: 'kagan-rally-recall',
+    label: 'Rally Recall',
+    description: 'Rapid fire recall of facts.',
+    fullDefinition: '1) Teacher closes book. 2) A recalls one fact. 3) B recalls a different fact. 4) Ping-pong back and forth.',
+    usage: 'Retrieval practice at end of lesson.',
+    pedagogicalValue: 'Retrieval practice (Testing Effect). Strengthens neural pathways.',
+    teacherScript: 'Close your books. How many facts can you recall in 60 seconds? Go!'
+  },
+  {
+    id: 'kagan-showdown',
+    label: 'Showdown',
+    description: 'Teammates write secret answers then reveal.',
+    fullDefinition: '1) Captain reads question. 2) ALL write answer secretly. 3) Captain calls "Showdown!". 4) Teammates reveal and compare.',
+    usage: 'Math problems or short answer verification.',
+    pedagogicalValue: 'Safe assessment. Peers correct each other before the teacher sees it.',
+    socialSkill: 'Celebrating success ("Great job, we all got it!").',
+    teacherScript: 'Write your answer... hide it... and SHOWDOWN!'
+  },
+  {
+    id: 'kagan-rotating-lines',
+    label: 'Rotating Lines',
+    description: 'Lines of students move to quiz new partners.',
+    fullDefinition: '1) Two lines face each other. 2) Discuss/Quiz partner. 3) One line moves down one spot.',
+    usage: 'Rapid-fire repetition with multiple partners.',
+    pedagogicalValue: 'High volume of practice.',
+    socialSkill: 'Adaptability (adjusting to a new partner every minute).',
+    teacherScript: 'Line A, take one step to your right. New partner, new greeting!'
+  },
+  {
+    id: 'kagan-traveling-rally-quiz',
+    label: 'Traveling Rally Quiz',
+    description: 'Quizzing while walking.',
+    fullDefinition: 'Partners quiz each other while walking to a destination.',
+    usage: 'Transitions.',
+    pedagogicalValue: '"Walk and Talk" aids memory retention.',
+    teacherScript: 'As you walk to the door, quiz your partner on your 3 vocab words.'
+  }
+];
+
+const kaganBrainstorming: StrategyNode[] = [
+  {
+    id: 'kagan-jot-thoughts',
+    label: 'Jot Thoughts',
+    description: 'Brainstorming on slips of paper.',
+    fullDefinition: '1) Topic given. 2) Students write idea on slip, say it, place in center. 3) NO TURNS—Simultaneous speed writing.',
+    usage: 'Generating many ideas quickly.',
+    pedagogicalValue: 'Prevents dominant talkers. Quieter students contribute equally.',
+    socialSkill: 'Respecting space (placing, not throwing).',
+    teacherScript: 'Don\'t wait for a turn! If you have an idea, write it and drop it.'
+  },
+  {
+    id: 'kagan-idea-roundup',
+    label: 'Idea RoundUp!',
+    description: 'Collect ideas from classmates.',
+    fullDefinition: '1) StandUp-HandUp-PairUp. 2) Share idea with partner. 3) Partner records it. 4) Switch/Trade papers.',
+    usage: 'Cross-pollinating ideas.',
+    pedagogicalValue: 'Students "harvest" wisdom from the whole room.',
+    socialSkill: 'Appreciation ("That\'s a great idea, I\'m writing it down").',
+    teacherScript: 'Round up as many new ideas as you can from your classmates!'
+  },
+  {
+    id: 'kagan-roundtable',
+    label: 'RoundTable',
+    description: 'Single paper passed around team.',
+    fullDefinition: '1) One paper per team. 2) Student A writes & speaks. 3) Pass to left.',
+    usage: 'List building or creative writing.',
+    pedagogicalValue: 'Enforces equal participation. No one can opt out.',
+    socialSkill: 'Patience (waiting for the paper).',
+    teacherScript: 'One paper, one pen. Pass it to the left.'
+  },
+  {
+    id: 'kagan-continuous-roundtable',
+    label: 'Continuous RoundTable',
+    description: 'Fast-paced RoundTable.',
+    fullDefinition: 'Same as RoundTable but fast-paced for a set time (e.g., 3 mins).',
+    usage: 'Speed brainstorming.',
+    pedagogicalValue: 'Bypasses "internal editor" to boost creativity flow.',
+    teacherScript: 'Keep that paper moving! Don\'t let it stop.'
+  },
+  {
+    id: 'kagan-single-roundtable',
+    label: 'Single RoundTable',
+    description: 'One lap only.',
+    fullDefinition: 'Paper goes around exactly once.',
+    usage: 'Complex answers where quality matters more than quantity.',
+    pedagogicalValue: 'Focus on quality contribution.',
+    teacherScript: 'We are doing one lap only. Make your contribution count.'
+  },
+  {
+    id: 'kagan-simultaneous-roundtable',
+    label: 'Simultaneous RoundTable',
+    description: 'All 4 students pass papers at once.',
+    fullDefinition: '1) All 4 students have a paper. 2) Write idea. 3) Pass all papers to left at once. 4) Read neighbor\'s list and add to it.',
+    usage: 'High volume brainstorming.',
+    pedagogicalValue: '4x the engagement of standard RoundTable. No waiting.',
+    socialSkill: 'Reading others\' handwriting; building on others\' ideas.',
+    teacherScript: 'Everyone write... and PASS! Read what your neighbor wrote and add a new idea.'
+  },
+  {
+    id: 'kagan-timed-roundtable',
+    label: 'Timed RoundTable',
+    description: 'RoundTable with a timer per person.',
+    fullDefinition: 'RoundTable with a timer (e.g., 30 secs per person).',
+    usage: 'Keeping focus.',
+    pedagogicalValue: 'Urgency focuses the ADHD brain.',
+    teacherScript: 'You have 30 seconds... pass!'
+  },
+  {
+    id: 'kagan-rallytable',
+    label: 'RallyTable',
+    description: 'Pairs pass paper back and forth.',
+    fullDefinition: 'Pair shares one paper/pen. A writes, B writes.',
+    usage: 'Dyadic brainstorming.',
+    pedagogicalValue: 'Intense dyadic collaboration. "Brainstorming loop."',
+    teacherScript: 'Shoulder partners. Back and forth. Fill that page!'
+  },
+  {
+    id: 'kagan-simultaneous-rallytable',
+    label: 'Simultaneous RallyTable',
+    description: 'Both partners write and swap.',
+    fullDefinition: 'Both partners have paper. Write, Swap, Read, Add.',
+    usage: 'Maximum writing output.',
+    pedagogicalValue: 'High engagement.',
+    teacherScript: 'Write your answer, swap papers, check your partner\'s work, and add to it.'
+  },
+  {
+    id: 'kagan-pass-n-praise',
+    label: 'Pass-N-Praise',
+    description: 'Praise previous idea before adding.',
+    fullDefinition: 'Write answer, pass paper. Receiver MUST praise the previous entry before writing.',
+    usage: 'Classbuilding and writing.',
+    pedagogicalValue: 'Makes it safe to share ideas.',
+    teacherScript: 'Before you write, read your neighbor\'s idea and tell them why it\'s good.'
+  },
+  {
+    id: 'kagan-snowball',
+    label: 'Snowball',
+    description: 'Write, crumple, toss, read.',
+    fullDefinition: '1) Write idea. 2) Crumple paper. 3) Toss it! 4) Pick up new snowball, read, add to it.',
+    usage: 'Anonymous brainstorming.',
+    pedagogicalValue: 'Anonymity encourages risk-taking. Fun physical release.',
+    socialSkill: 'Physical safety (throwing safely).',
+    teacherScript: 'Write your secret idea. Crumple it up. Snowball fight! Now find a new snowball and open it.'
+  }
+];
+
+const kaganDiscussion: StrategyNode[] = [
+  {
+    id: 'kagan-roundrobin',
+    label: 'RoundRobin',
+    description: 'Oral turn-taking in team.',
+    fullDefinition: 'Oral turn-taking in team. Starting with Person 1, go around the circle. Everyone shares one idea.',
+    usage: 'Sharing opinions or answers.',
+    pedagogicalValue: 'Democratic equalizer. Everyone gets the floor.',
+    socialSkill: 'Listening without interrupting.',
+    teacherScript: 'Starting with Person 1, go around the circle. Everyone shares one idea.'
+  },
+  {
+    id: 'kagan-continuous-roundrobin',
+    label: 'Continuous RoundRobin',
+    description: 'Keep going around until stop.',
+    fullDefinition: 'Keep going around until time is up.',
+    usage: 'Deepening discussion.',
+    pedagogicalValue: 'Moves beyond surface answers.',
+    teacherScript: 'Keep going around until I say stop. Dig deeper.'
+  },
+  {
+    id: 'kagan-single-roundrobin',
+    label: 'Single RoundRobin',
+    description: 'Once around the circle.',
+    fullDefinition: 'Once around the circle.',
+    usage: 'Quick status check.',
+    pedagogicalValue: 'Brief check-in.',
+    teacherScript: 'One quick lap around the team. Go.'
+  },
+  {
+    id: 'kagan-timed-roundrobin',
+    label: 'Timed RoundRobin',
+    description: 'Specific time per person.',
+    fullDefinition: 'Specific time per person (e.g., 60 secs).',
+    usage: 'Lengthy explanations.',
+    pedagogicalValue: 'Equity of airtime. Stops "hogs" and encourages "logs".',
+    teacherScript: 'Person 1, you have 60 seconds. Teammates, silence until the timer beeps.'
+  },
+  {
+    id: 'kagan-think-write-roundrobin',
+    label: 'Think-Write-RoundRobin',
+    description: 'Processing time before speaking.',
+    fullDefinition: 'Think -> Write -> Share Orally.',
+    usage: 'Complex questions.',
+    pedagogicalValue: 'Processing time helps introverts/ELLs formulate better answers.',
+    teacherScript: 'Think first. Now write it down. Okay, now share what you wrote.'
+  },
+  {
+    id: 'kagan-allrecord-roundrobin',
+    label: 'AllRecord RoundRobin',
+    description: 'One speaks, all write.',
+    fullDefinition: 'One speaks, ALL write it down.',
+    usage: 'Note taking.',
+    pedagogicalValue: 'Accountability for listening.',
+    socialSkill: 'Verification ("Did you say...?").',
+    teacherScript: 'If Student 1 says it, everyone writes it. Listen carefully.'
+  },
+  {
+    id: 'kagan-rotating-role-roundrobin',
+    label: 'Rotating Role RoundRobin',
+    description: 'Roles switch each round.',
+    fullDefinition: 'Roles (Timekeeper, Cheerleader) switch each round.',
+    usage: 'Skill building.',
+    pedagogicalValue: 'Practice different leadership skills.',
+    teacherScript: 'Rotate roles one person to the left. New Cheerleader, get ready!'
+  },
+  {
+    id: 'kagan-rallyrobin',
+    label: 'RallyRobin',
+    description: 'Pair oral ping-pong.',
+    fullDefinition: 'Pair oral ping-pong. A, B, A, B.',
+    usage: 'Listing or quick sharing.',
+    pedagogicalValue: 'Max oral practice (50% of class speaking at once).',
+    teacherScript: 'Turn to your partner. A, B, A, B. Go!'
+  },
+  {
+    id: 'kagan-both-record-rallyrobin',
+    label: 'Both Record RallyRobin',
+    description: 'Say it, then both write it.',
+    fullDefinition: 'RallyRobin + both write.',
+    usage: 'Creating a list.',
+    pedagogicalValue: 'Creates a study guide.',
+    teacherScript: 'Say it, then write it. Both of you record the answer.'
+  },
+  {
+    id: 'kagan-timed-pair-share',
+    label: 'Timed Pair Share',
+    description: 'A shares for X min, B listens.',
+    fullDefinition: 'A shares for X min (B listens). Switch.',
+    usage: 'In-depth sharing.',
+    pedagogicalValue: 'Teaches deep listening. B cannot interrupt.',
+    socialSkill: 'Non-verbal listening cues.',
+    teacherScript: 'Partner A, you have 1 minute. Partner B, just listen—don\'t talk until the timer beeps.'
+  },
+  {
+    id: 'kagan-traveling-pair-share',
+    label: 'Traveling Pair Share',
+    description: 'Timed pair share with new partners.',
+    fullDefinition: 'Timed Pair Share + move to new partner.',
+    usage: 'Social bridging.',
+    pedagogicalValue: 'Breaks up cliques.',
+    teacherScript: 'Share for 1 minute, then travel to a new partner and share again.'
+  },
+  {
+    id: 'kagan-pair-share',
+    label: 'Pair Share',
+    description: 'Informal turn and talk.',
+    fullDefinition: 'Informal "Turn and Talk".',
+    usage: 'Quick processing.',
+    pedagogicalValue: 'Quick engagement.',
+    teacherScript: 'Turn to your neighbor and tell them what you think.'
+  },
+  {
+    id: 'kagan-talking-chips',
+    label: 'Talking Chips',
+    description: 'Spend a chip to speak.',
+    fullDefinition: 'Place chip to talk. Can\'t talk again until all chips used.',
+    usage: 'Discussion regulation.',
+    pedagogicalValue: 'Regulates impulse control. Visualizes turn-taking.',
+    teacherScript: 'Put your chip in the center to speak. If you have no chips, your job is to listen.'
+  },
+  {
+    id: 'kagan-gossip-gossip',
+    label: 'Gossip Gossip',
+    description: 'Tell others what your partner said.',
+    fullDefinition: 'A tells B. B goes to C and tells them what A said.',
+    usage: 'Listening practice.',
+    pedagogicalValue: 'Paraphrasing and memory skills.',
+    teacherScript: 'Listen closely, because you\'re going to have to tell someone else what your partner just said!'
+  },
+  {
+    id: 'kagan-paraphrase-passport',
+    label: 'Paraphrase Passport',
+    description: 'Summarize previous speaker to get a turn.',
+    fullDefinition: 'A speaks. B says "You said..." before sharing their own idea.',
+    usage: 'Conflict resolution or complex discussion.',
+    pedagogicalValue: 'Empathy builder. Listening to understand, not just reply.',
+    teacherScript: 'You need a passport to speak! Your passport is correctly summarizing what the person before you said.'
+  },
+  {
+    id: 'kagan-team-interview',
+    label: 'Team Interview',
+    description: 'One student interviewed by teammates.',
+    fullDefinition: 'One student interviewed by teammates.',
+    usage: 'Spotlighting a student.',
+    pedagogicalValue: 'Valuing individual experience.',
+    teacherScript: 'Student 1 is the star. Teammates, ask them questions about their topic.'
+  },
+  {
+    id: 'kagan-rally-interview',
+    label: 'Rally Interview',
+    description: 'Partners interview each other.',
+    fullDefinition: 'A interviews B. Switch.',
+    usage: 'Getting to know you.',
+    pedagogicalValue: 'Inquiry skills (asking follow-ups).',
+    teacherScript: 'Partner A, you are the reporter. Interview Partner B.'
+  },
+  {
+    id: 'kagan-timed-pair-interview',
+    label: 'Timed Pair Interview',
+    description: 'Strict time limits on interview.',
+    fullDefinition: 'Strict time limits on interview.',
+    usage: 'Fluency under pressure.',
+    pedagogicalValue: 'Rapid info gathering.',
+    teacherScript: 'You have 2 minutes to get as much info as you can!'
+  }
+];
+
+const kaganThinking: StrategyNode[] = [
+  {
+    id: 'kagan-allrecord-consensus',
+    label: 'AllRecord Consensus',
+    description: 'Discuss, Agree, All Write.',
+    fullDefinition: 'Discuss -> Agree -> ALL write.',
+    usage: 'Team problem solving.',
+    pedagogicalValue: 'Prevents voting. Forces negotiation.',
+    teacherScript: 'Do not write until you all agree. If one person disagrees, keep talking.'
+  },
+  {
+    id: 'kagan-roundtable-consensus',
+    label: 'RoundTable Consensus',
+    description: 'Suggest, Agree, Write, Pass.',
+    fullDefinition: 'A suggests. Team agrees? A writes. Pass.',
+    usage: 'Constructing a team list.',
+    pedagogicalValue: 'Unified team output.',
+    teacherScript: 'Discuss the idea first. Does everyone agree? Okay, write it down.'
+  },
+  {
+    id: 'kagan-rallytable-consensus',
+    label: 'RallyTable Consensus',
+    description: 'Pair negotiation before writing.',
+    fullDefinition: 'Pair negotiation before writing.',
+    usage: 'Dyadic problem solving.',
+    pedagogicalValue: 'Dyadic consensus.',
+    teacherScript: 'Partner A, suggest an answer. Partner B, do you agree? If yes, write it.'
+  },
+  {
+    id: 'kagan-sage-n-scribe',
+    label: 'Sage-N-Scribe',
+    description: 'One thinks/talks, one writes.',
+    fullDefinition: 'Sage talks (no pen). Scribe writes (no talking, unless checking).',
+    usage: 'Problem solving.',
+    pedagogicalValue: 'Metacognition (verbalizing the process).',
+    socialSkill: 'Role discipline (not grabbing the pen).',
+    teacherScript: 'Sage, tell the Scribe exactly what to do. Scribe, don\'t write unless you understand.'
+  },
+  {
+    id: 'kagan-rallycoach',
+    label: 'RallyCoach',
+    description: 'Solve and Coach.',
+    fullDefinition: 'A solves/talks. B watches/coaches. Switch.',
+    usage: 'Skill practice.',
+    pedagogicalValue: 'Immediate feedback loop.',
+    teacherScript: 'Partner B, watch closely. If A gets stuck, give a clue, not the answer.'
+  },
+  {
+    id: 'kagan-mix-pair-rally-coach',
+    label: 'Mix-Pair-Rally Coach',
+    description: 'Move, pair up, coach.',
+    fullDefinition: 'Mix -> Pair -> RallyCoach problem -> Mix.',
+    usage: 'Dynamic practice.',
+    pedagogicalValue: 'High energy practice.',
+    teacherScript: 'Mix around the room! Freeze! Find a partner and solve Problem 1.'
+  },
+  {
+    id: 'kagan-read-n-review',
+    label: 'Read-N-Review',
+    description: 'Read and summarize.',
+    fullDefinition: 'A reads. B summarizes. Switch.',
+    usage: 'Reading comprehension.',
+    pedagogicalValue: 'Comprehension check. Prevents "zoning out".',
+    teacherScript: 'Read one paragraph, then stop. Partner, tell them what they just read.'
+  },
+  {
+    id: 'kagan-rally-read',
+    label: 'Rally Read',
+    description: 'Alternate reading sentences.',
+    fullDefinition: 'Alternate reading sentences/paragraphs.',
+    usage: 'Reading fluency.',
+    pedagogicalValue: 'Oral fluency in safe setting.',
+    teacherScript: 'Partner A reads a sentence, then Partner B. Keep the rhythm going.'
+  },
+  {
+    id: 'kagan-listen-right',
+    label: 'Listen Right!',
+    description: 'Lecture, pause, write, share.',
+    fullDefinition: 'Lecture -> Pause -> Write -> Share -> Check.',
+    usage: 'During lectures.',
+    pedagogicalValue: 'Processing time. Moves info to long-term memory.',
+    teacherScript: 'Pencils down and listen... Okay, pencils up! Write what you remember.'
+  },
+  {
+    id: 'kagan-invisible-pal',
+    label: 'Invisible Pal',
+    description: 'Invent a character.',
+    fullDefinition: 'Invent character -> Introduce to partner.',
+    usage: 'Creative writing prep.',
+    pedagogicalValue: 'Imagination/Abstract thinking.',
+    teacherScript: 'Introduce your invisible friend to your partner. What are they like?'
+  }
+];
+
+const kaganClassbuildingNet: StrategyNode[] = [
+  {
+    id: 'kagan-find-someone-who',
+    label: 'Find Someone Who',
+    description: 'Circulate to find classmates who fit criteria.',
+    fullDefinition: 'Students circulate with a grid of questions, finding different classmates to answer each one and sign their sheet.',
+    usage: 'Review or getting to know you.',
+    pedagogicalValue: 'Builds a class-wide network. Forces interaction with non-friends.',
+    teacherScript: 'Stand up, mix, and find someone who can sign your sheet!',
+    optionA: 'Create a "Review Hunt" with questions from the current unit.',
+    optionB: 'Create a "People Hunt" with fun traits.',
+    requiresResource: true
+  },
+  {
+    id: 'kagan-inside-outside-circle-net',
+    label: 'Inside-Outside Circle',
+    description: 'Concentric circles for sharing.',
+    fullDefinition: 'Concentric circles facing each other. Share with opposite, rotate.',
+    usage: 'Sharing opinions or knowledge.',
+    pedagogicalValue: 'Removes anxiety of finding a partner. 50% class speaks at once.',
+    teacherScript: 'Inside circle face out. Outside circle face in. Share... Rotate!',
+    optionA: 'Use open-ended discussion prompts about the lesson.',
+    optionB: 'Use "Getting to Know You" prompts.'
+  },
+  {
+    id: 'kagan-who-am-i',
+    label: 'Who Am I?',
+    description: 'Guess identity on back.',
+    fullDefinition: 'Students have a secret identity taped to back. Mix and ask Yes/No questions.',
+    usage: 'Reviewing famous people or concepts.',
+    pedagogicalValue: 'Builds inquiry and classification skills.',
+    teacherScript: 'Mix and ask yes/no questions to find out who you are!',
+    optionA: 'Identities are Vocabulary Terms or Historical Figures.',
+    optionB: 'Identities are Famous Celebrities or Superheroes.',
+    requiresResource: true
+  },
+  {
+    id: 'kagan-mix-n-match',
+    label: 'Mix-N-Match',
+    description: 'Find partner with matching card.',
+    fullDefinition: 'Students mix with cards and must find the classmate holding their matching half.',
+    usage: 'Definitions or pairs.',
+    pedagogicalValue: 'Physicalizes connection of concepts.',
+    teacherScript: 'Mix... Freeze! Find your match!',
+    optionA: 'Match Problem to Solution, or Term to Definition.',
+    optionB: 'Match "Famous Pairs" (e.g., Peanut Butter & Jelly).',
+    requiresResource: true
+  }
+];
+
+const kaganClassbuildingValues: StrategyNode[] = [
+  {
+    id: 'kagan-corners',
+    label: 'Corners',
+    description: 'Move to corner representing opinion.',
+    fullDefinition: 'Students move to a corner representing their opinion/choice, then discuss.',
+    usage: 'Debate or preferences.',
+    pedagogicalValue: 'Visualizes diversity of thought.',
+    teacherScript: 'Go to Corner 1 if you agree, Corner 2 if you disagree...',
+    optionA: 'Debate a topic (e.g., Best method for solving equation).',
+    optionB: 'Fun preferences (e.g., Favorite Season).'
+  },
+  {
+    id: 'kagan-similarity-groups-val',
+    label: 'Similarity Groups',
+    description: 'Group by trait.',
+    fullDefinition: 'Teacher announces a trait; students scramble to form groups with everyone who shares that trait.',
+    usage: 'Finding common ground.',
+    pedagogicalValue: 'Breaks down cliques.',
+    teacherScript: 'Group by [Topic]! Go!',
+    optionA: 'Group by "My favorite part of the story was..."',
+    optionB: 'Group by "Birthday Month" or "Shoe Color".'
+  },
+  {
+    id: 'kagan-line-ups',
+    label: 'Line-Ups',
+    description: 'Line up in specific order.',
+    fullDefinition: 'Students line up in a specific order (e.g., Value Line) and then "fold" the line to talk.',
+    usage: 'Sequencing or opinion scale.',
+    pedagogicalValue: 'Kinesthetic sequencing. "Folding" ensures diversity in pairs.',
+    teacherScript: 'Line up by [Criteria]. Now fold the line!',
+    optionA: 'Line up by understanding or Opinion (Agree to Disagree).',
+    optionB: 'Line up by Birthday or Distance from school.'
+  }
+];
+
+const kaganClassbuildingFun: StrategyNode[] = [
+  {
+    id: 'kagan-formations',
+    label: 'Formations',
+    description: 'Form shape/word with bodies.',
+    fullDefinition: 'The class works together to physically form a shape, word, or diagram with their bodies.',
+    usage: 'Visualizing concepts.',
+    pedagogicalValue: 'Total Positive Interdependence.',
+    teacherScript: 'Make the shape of...!',
+    optionA: 'Form a Geometry Shape or Letter.',
+    optionB: 'Form a Smiley Face or School Initials.'
+  },
+  {
+    id: 'kagan-mix-freeze-group',
+    label: 'Mix-Freeze-Group',
+    description: 'Mix until freeze, form group of X.',
+    fullDefinition: 'Students mix until "Freeze," then must quickly form groups of a specific size.',
+    usage: 'Energizer or Math.',
+    pedagogicalValue: 'High adrenaline; forces quick decision making.',
+    teacherScript: 'Mix... Freeze! Form a group of [Number]!',
+    optionA: 'Form a group the size of... the square root of 16!',
+    optionB: 'Form a group of 5!'
+  }
+];
+
 const cel5dStrategies: StrategyNode[] = [
   {
     id: 'cel-purpose',
@@ -483,6 +1105,34 @@ export const strategies: StrategyNode[] = [
         label: 'CEL 5D+ Framework',
         description: 'Instructional Framework for Teaching & Learning',
         children: cel5dStrategies
+    },
+    {
+        id: 'instructional-strategies-root',
+        label: 'Instructional Strategies',
+        description: 'Kagan Structures & Cooperative Learning.',
+        children: [
+            {
+                id: 'kagan-root',
+                label: 'Kagan Structures Integration',
+                description: 'Cooperative Learning Structures.',
+                children: [
+                    { id: 'kagan-review', label: 'Review & Mastery', children: kaganReview },
+                    { id: 'kagan-brainstorming', label: 'Brainstorming & Writing', children: kaganBrainstorming },
+                    { id: 'kagan-discussion', label: 'Discussion & Oral Sharing', children: kaganDiscussion },
+                    { id: 'kagan-thinking', label: 'Thinking, Consensus & Logic', children: kaganThinking }
+                ]
+            },
+            {
+                id: 'kagan-classbuilding',
+                label: 'Kagan Classbuilding Integration',
+                description: 'Team & Class Building Structures',
+                children: [
+                    { id: 'kagan-getting-acquainted', label: 'Getting Acquainted & Networking', children: kaganClassbuildingNet },
+                    { id: 'kagan-values', label: 'Values & Opinions', children: kaganClassbuildingValues },
+                    { id: 'kagan-fun', label: 'Fun, Energy & Formations', children: kaganClassbuildingFun }
+                ]
+            }
+        ]
     },
     {
         id: 'questioning-strategies-root',

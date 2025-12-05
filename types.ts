@@ -6,6 +6,11 @@ export interface StrategyNode {
   fullDefinition?: string;
   usage?: string;
   pedagogicalValue?: string;
+  teacherScript?: string; // Specific for Kagan
+  socialSkill?: string;   // Specific for Kagan
+  optionA?: string;       // Kagan Classbuilding: Academic Option
+  optionB?: string;       // Kagan Classbuilding: Social Option
+  requiresResource?: boolean; // Flag for PDF generation
   children?: StrategyNode[];
 }
 
