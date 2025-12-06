@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { InputForm } from './components/InputForm';
@@ -7,25 +6,30 @@ import { VoiceAssistant } from './components/VoiceAssistant';
 import { ChatInterface } from './components/ChatInterface';
 import { StrategyInfo } from './components/StrategyInfo';
 import { SaveDialog } from './components/SaveDialog';
-import { StrategyNode, LessonInput, AppState, ReferenceFile, LessonVersion, SavedPlan } from './types';
-import { strategies } from './data/strategies'; // Import strategies for lookups
-import { generateLessonPlan } from './services/geminiService';
-import { LayoutDashboard, AlertCircle, MessageSquare, RefreshCw, Upload, Link as LinkIcon, X, Plus, History, Clock, Save, Info } from 'lucide-react';
+import { StrategyNode, LessonInput, AppState, ReferenceFile, LessonVersion, SavedPlan, StrategySuggestion } from './types';
+import { strategies } from './data/strategies';
+import { generateLessonPlan, suggestStrategies, generateWorksheet } from './services/geminiService';
+import { LayoutDashboard, AlertCircle, MessageSquare, RefreshCw, Upload, Link as LinkIcon, X, Plus, History, Clock, Save } from 'lucide-react';
 
 const App: React.FC = () => {
-  // State for selected IDs (multi-select)
+  // State for selected IDs
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  
-  // Track IDs that were used to generate the CURRENT plan to detect dirty state
   const [lastUsedStrategyIds, setLastUsedStrategyIds] = useState<string[]>([]);
 
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
   const [planMarkdown, setPlanMarkdown] = useState<string>('');
+  const [worksheetMarkdown, setWorksheetMarkdown] = useState<string>(''); // Kept for persistence compatibility
+  
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [isChatOpen, setIsChatOpen] = useState(false);
   
+  // Suggestions State
+  const [suggestions, setSuggestions] = useState<StrategySuggestion[]>([]);
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  
   // Sidebar State
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(320);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   
   // Version History State
@@ -39,14 +43,12 @@ const App: React.FC = () => {
 
   // Refinement text for the bottom bar
   const [refinementText, setRefinementText] = useState('');
-  
-  // State for supplementary files/links added during refinement phase
   const [refinementFiles, setRefinementFiles] = useState<ReferenceFile[]>([]);
   const [refinementLinkText, setRefinementLinkText] = useState('');
   const [refinementLinks, setRefinementLinks] = useState<string[]>([]);
   const refinementFileRef = useRef<HTMLInputElement>(null);
 
-  // Lifted state: Single source of truth for the form data
+  // Form Data
   const [currentFormData, setCurrentFormData] = useState<LessonInput>({
     unitName: '',
     topic: '',
@@ -79,18 +81,15 @@ const App: React.FC = () => {
   }, [savedPlans, isStorageLoaded]);
 
   // --- AUTO SAVE TO CURRENT PLAN ---
-  // When working on an EXISTING plan, auto-save changes to the main record and memory
   useEffect(() => {
     if (currentPlanId && appState === AppState.SUCCESS && planMarkdown) {
         setSavedPlans(prev => prev.map(plan => {
             if (plan.id === currentPlanId) {
-                // Determine if this is a "new" version compared to what's stored
-                // Note: We don't push to 'versions' array here to avoid spamming history
-                // We just update the "current state" of the plan
                 return {
                     ...plan,
                     updatedAt: Date.now(),
                     markdown: planMarkdown,
+                    worksheetMarkdown: worksheetMarkdown,
                     data: currentFormData,
                     strategyIds: selectedIds
                 };
@@ -98,36 +97,38 @@ const App: React.FC = () => {
             return plan;
         }));
     }
-  }, [planMarkdown, currentFormData, selectedIds, currentPlanId, appState]);
+  }, [planMarkdown, worksheetMarkdown, currentFormData, selectedIds, currentPlanId, appState]);
 
   // --- AUTO SAVE TO VERSION HISTORY (Memory Only) ---
-  // This creates undo points in the session
   useEffect(() => {
     if (appState === AppState.SUCCESS && planMarkdown) {
         const newVersion: LessonVersion = {
             id: Date.now().toString(),
             timestamp: Date.now(),
             markdown: planMarkdown,
+            worksheetMarkdown: worksheetMarkdown,
             strategyIds: [...selectedIds],
             description: 'Auto-saved'
         };
-        // Avoid duplicates
+        // Avoid duplicates (checking plan text)
         setVersions(prev => {
-            if (prev.length > 0 && prev[0].markdown === planMarkdown) {
+            if (prev.length > 0 && prev[0].markdown === planMarkdown && prev[0].worksheetMarkdown === worksheetMarkdown) {
                 return prev;
             }
             return [newVersion, ...prev].slice(0, 20); 
         });
     }
-  }, [planMarkdown, appState]);
+  }, [planMarkdown, worksheetMarkdown, appState]);
 
   const handleCreateNewPlan = () => {
       setCurrentPlanId(null);
       setAppState(AppState.IDLE);
       setPlanMarkdown('');
+      setWorksheetMarkdown('');
       setSelectedIds([]);
       setLastUsedStrategyIds([]);
       setVersions([]);
+      setSuggestions([]);
       setCurrentFormData({
         unitName: '',
         topic: '',
@@ -146,16 +147,17 @@ const App: React.FC = () => {
       setCurrentPlanId(plan.id);
       setCurrentFormData(plan.data);
       setPlanMarkdown(plan.markdown);
+      setWorksheetMarkdown(plan.worksheetMarkdown || '');
       setSelectedIds(plan.strategyIds);
       setVersions(plan.versions);
       setLastUsedStrategyIds(plan.strategyIds);
+      setSuggestions([]);
       
       if (plan.markdown) {
         setAppState(AppState.SUCCESS);
       } else {
         setAppState(AppState.IDLE);
       }
-      // On mobile/narrow screens, maybe collapse sidebar?
   };
 
   const handleDeletePlan = (id: string) => {
@@ -177,11 +179,12 @@ const App: React.FC = () => {
       if (!currentPlanId) {
           setIsSaveDialogOpen(true);
       } else {
-          // Explicit save adds a named version marker
+          // Explicit save creates version
           const newVersion: LessonVersion = {
             id: Date.now().toString(),
             timestamp: Date.now(),
             markdown: planMarkdown,
+            worksheetMarkdown: worksheetMarkdown,
             strategyIds: [...selectedIds],
             description: 'Manual Save'
           };
@@ -194,9 +197,10 @@ const App: React.FC = () => {
                       ...p,
                       updatedAt: Date.now(),
                       markdown: planMarkdown,
+                      worksheetMarkdown: worksheetMarkdown,
                       data: currentFormData,
                       strategyIds: selectedIds,
-                      versions: [newVersion, ...p.versions] // Persist the version history
+                      versions: [newVersion, ...p.versions]
                   };
               }
               return p;
@@ -209,6 +213,7 @@ const App: React.FC = () => {
         id: Date.now().toString(),
         timestamp: Date.now(),
         markdown: planMarkdown,
+        worksheetMarkdown: worksheetMarkdown,
         strategyIds: [...selectedIds],
         description: 'Initial Save'
       };
@@ -220,6 +225,7 @@ const App: React.FC = () => {
           updatedAt: Date.now(),
           data: currentFormData,
           markdown: planMarkdown,
+          worksheetMarkdown: worksheetMarkdown,
           strategyIds: selectedIds,
           versions: [newVersion]
       };
@@ -231,13 +237,13 @@ const App: React.FC = () => {
 
   const handleRestoreVersion = (version: LessonVersion) => {
     setPlanMarkdown(version.markdown);
+    setWorksheetMarkdown(version.worksheetMarkdown || '');
     setSelectedIds(version.strategyIds);
     setLastUsedStrategyIds(version.strategyIds);
     setAppState(AppState.SUCCESS);
-    setIsHistoryOpen(false); // Close history panel
+    setIsHistoryOpen(false);
   };
 
-  // Helper to find all selected nodes
   const getSelectedStrategies = (): StrategyNode[] => {
     const selectedNodes: StrategyNode[] = [];
     const traverse = (nodes: StrategyNode[]) => {
@@ -255,13 +261,9 @@ const App: React.FC = () => {
   };
 
   const selectedStrategies = getSelectedStrategies();
-
-  // Detect if selection has changed since generation
   const currentSelectionSignature = [...selectedIds].sort().join(',');
   const lastUsedSignature = [...lastUsedStrategyIds].sort().join(',');
   const isSelectionDirty = appState === AppState.SUCCESS && currentSelectionSignature !== lastUsedSignature;
-  
-  // Has the user typed something in the refinement box?
   const isRefinementActive = refinementText.trim().length > 0 || refinementFiles.length > 0 || refinementLinks.length > 0;
 
   const handleToggleStrategy = (id: string) => {
@@ -303,8 +305,6 @@ const App: React.FC = () => {
   };
 
   const handleGenerate = async () => {
-    if (selectedStrategies.length === 0) return;
-
     setAppState(AppState.LOADING);
     setErrorMsg('');
     
@@ -320,13 +320,13 @@ const App: React.FC = () => {
       const result = await generateLessonPlan(updatedFormData, selectedStrategies, refinementText, planToRefine);
       
       setPlanMarkdown(result);
+      if (!planToRefine) {
+          setWorksheetMarkdown(''); 
+      }
+      
       setAppState(AppState.SUCCESS);
       setLastUsedStrategyIds(selectedIds);
-      
-      // Update form data with accumulated files
       setCurrentFormData(updatedFormData);
-      
-      // Clear refinement inputs
       setRefinementText('');
       setRefinementFiles([]);
       setRefinementLinks([]);
@@ -336,15 +336,58 @@ const App: React.FC = () => {
     }
   };
 
+  const suggestRequestIdRef = useRef<number>(0);
+
+  const handleGetSuggestions = async (purpose: string) => {
+      if (isSuggesting) {
+          setIsSuggesting(false);
+          suggestRequestIdRef.current += 1;
+          return;
+      }
+
+      setIsSuggesting(true);
+      const requestId = suggestRequestIdRef.current + 1;
+      suggestRequestIdRef.current = requestId;
+
+      try {
+          const results = await suggestStrategies(currentFormData, purpose);
+          if (requestId === suggestRequestIdRef.current) {
+              setSuggestions(results);
+              setIsSuggesting(false);
+          }
+      } catch (e) {
+          if (requestId === suggestRequestIdRef.current) {
+              console.error(e);
+              alert("Could not generate suggestions. Please ensure you have added some lesson content.");
+              setIsSuggesting(false);
+          }
+      }
+  };
+
   const handleBackToEditor = () => {
-      // If we are just viewing a saved plan, going back shouldn't reset the ID, but should allow editing inputs
       setAppState(AppState.IDLE);
       setIsSidebarCollapsed(false); 
   };
 
+  const handleImportPlan = (plan: SavedPlan) => {
+      if (!plan.id || !plan.data) {
+          alert("Invalid plan format");
+          return;
+      }
+      if (savedPlans.some(p => p.id === plan.id)) {
+          plan.id = crypto.randomUUID();
+          plan.name = `${plan.name} (Imported)`;
+      }
+      setSavedPlans(prev => [plan, ...prev]);
+      handleLoadPlan(plan);
+  };
+
+  const isRefining = appState === AppState.LOADING && !!planMarkdown;
+  const showPlan = appState === AppState.SUCCESS || isRefining;
+  const showInput = !showPlan && appState !== AppState.SUCCESS;
+
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-900">
-      {/* Sidebar */}
       <Sidebar 
         onToggleStrategy={handleToggleStrategy} 
         selectedIds={selectedIds} 
@@ -357,20 +400,20 @@ const App: React.FC = () => {
         onRenamePlan={handleRenamePlan}
         currentPlanId={currentPlanId}
         onNewPlan={handleCreateNewPlan}
+        onImportPlan={handleImportPlan}
+        width={sidebarWidth}
+        onWidthChange={setSidebarWidth}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto relative flex flex-col transition-all duration-300">
+      <main className="flex-1 relative flex flex-col h-screen overflow-hidden transition-all duration-300">
         
-        {/* Top Navigation / Header */}
-        <header className="bg-white border-b border-slate-200 py-4 px-8 flex items-center justify-between sticky top-0 z-10 shadow-sm">
+        <header className="bg-white border-b border-slate-200 py-4 px-8 flex items-center justify-between flex-shrink-0 z-50 shadow-sm relative">
           <div className="flex items-center">
             <div className="bg-blue-600 p-2 rounded-lg mr-3 shadow-md">
               <LayoutDashboard className="w-5 h-5 text-white" />
             </div>
             <div>
               <h1 className="text-xl font-bold text-slate-800 tracking-tight">YISS AI Integrated Lesson Planner</h1>
-              {/* Only show subtitle if a plan is actively loaded/named */}
               {currentPlanId && (
                 <div className="flex items-center text-xs font-medium mt-0.5 animate-in fade-in">
                     <span className="mr-2 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100">
@@ -382,7 +425,7 @@ const App: React.FC = () => {
           </div>
           
           <div className="flex items-center space-x-4">
-             {appState === AppState.SUCCESS && (
+             {showPlan && (
                 <>
                   <button
                     onClick={handleSaveClick}
@@ -406,7 +449,7 @@ const App: React.FC = () => {
                 apiKey={process.env.API_KEY || ''} 
                 currentInput={currentFormData}
                 currentPlan={planMarkdown}
-                currentPlanId={currentPlanId} // Pass ID for chat persistence
+                currentPlanId={currentPlanId}
              />
              
              <button 
@@ -418,52 +461,61 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        {/* Scrollable Content */}
-        <div className="flex-1 p-8 max-w-6xl mx-auto w-full relative">
-          
-          {appState === AppState.ERROR && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-r-lg flex items-center shadow-sm animate-in fade-in slide-in-from-top-2">
-              <AlertCircle className="w-5 h-5 text-red-500 mr-3" />
-              <span className="text-red-700 font-medium">{errorMsg}</span>
-            </div>
-          )}
+        <div className="flex-1 overflow-y-auto relative scroll-smooth" id="main-scroll-container">
+          <div className="p-8 max-w-6xl mx-auto w-full relative pb-40">
+            
+            {appState === AppState.ERROR && (
+              <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-r-lg flex items-center shadow-sm animate-in fade-in slide-in-from-top-2">
+                <AlertCircle className="w-5 h-5 text-red-500 mr-3" />
+                <span className="text-red-700 font-medium">{errorMsg}</span>
+              </div>
+            )}
 
-          {appState !== AppState.SUCCESS && (
-            <>
-               {selectedStrategies.length > 0 ? (
-                 <StrategyInfo strategies={selectedStrategies} />
-               ) : (
-                 <div className="bg-blue-50 border border-blue-100 rounded-xl p-6 text-center mb-8">
-                    <h3 className="text-blue-800 font-bold text-lg mb-1">Select Strategies</h3>
-                    <p className="text-blue-600">Choose Questioning Strategies, Biblical Integration (PAQ), or CEL 5D+ from the sidebar.</p>
+            {showInput && (
+              <>
+                 {selectedStrategies.length > 0 && (
+                   <StrategyInfo strategies={selectedStrategies} />
+                 )}
+
+                 <InputForm 
+                   selectedStrategies={selectedStrategies} 
+                   selectedStrategyIds={selectedIds}
+                   onSubmit={handleGenerate}
+                   isLoading={appState === AppState.LOADING}
+                   data={currentFormData}
+                   onChange={setCurrentFormData}
+                   onGetSuggestions={handleGetSuggestions}
+                   suggestions={suggestions}
+                   isSuggesting={isSuggesting}
+                   onSelectStrategy={handleToggleStrategy}
+                 />
+              </>
+            )}
+
+            {showPlan && (
+              <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
+                 {/* Header Controls */}
+                 <div className="flex justify-between items-end mb-6">
+                     <div className="flex flex-col gap-2">
+                         <button 
+                            onClick={handleBackToEditor}
+                            className="text-sm font-medium text-slate-500 hover:text-blue-600 flex items-center transition-colors self-start"
+                         >
+                            ← Back to Editor
+                         </button>
+                     </div>
                  </div>
-               )}
 
-               <InputForm 
-                 selectedStrategies={selectedStrategies} 
-                 onSubmit={handleGenerate}
-                 isLoading={appState === AppState.LOADING}
-                 data={currentFormData}
-                 onChange={setCurrentFormData}
-               />
-            </>
-          )}
+                 {/* View Content */}
+                 <PlanDisplay 
+                      markdown={planMarkdown} 
+                      selectedStrategies={selectedStrategies}
+                      gradeLevel={currentFormData.gradeLevel} 
+                 />
+              </div>
+            )}
 
-          {appState === AppState.SUCCESS && (
-            <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
-               <div className="flex justify-between items-center mb-6">
-                 <button 
-                    onClick={handleBackToEditor}
-                    className="text-sm font-medium text-slate-500 hover:text-blue-600 flex items-center transition-colors"
-                 >
-                    ← Back to Editor
-                 </button>
-               </div>
-
-               <PlanDisplay markdown={planMarkdown} selectedStrategies={selectedStrategies} />
-            </div>
-          )}
-
+          </div>
         </div>
       </main>
 
@@ -497,18 +549,18 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Refinement Bar */}
-      {appState === AppState.SUCCESS && (
+      {/* Refinement Bar - Only show when viewing Plan */}
+      {showPlan && (
         <div 
             className={`fixed bottom-0 bg-white border-t border-slate-200 p-4 shadow-2xl z-20 flex flex-col gap-3 animate-in slide-in-from-bottom-full duration-500 transition-all duration-300`}
-            style={{ left: isSidebarCollapsed ? '4rem' : '20rem', right: isHistoryOpen ? '18rem' : 0 }}
+            style={{ left: isSidebarCollapsed ? '4rem' : `${sidebarWidth}px`, right: isHistoryOpen ? '18rem' : 0 }}
         >
              <div className="flex gap-4 items-start">
                  <div className="flex-1 flex flex-col gap-2">
                      <textarea 
                         value={refinementText} 
                         onChange={(e) => setRefinementText(e.target.value)}
-                        placeholder="Type changes here (e.g. 'Make the intro shorter', 'Change the group activity')..."
+                        placeholder="Type instructions for updating the lesson plan here..."
                         rows={1}
                         className="w-full rounded-lg border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 py-3 px-4 text-sm bg-slate-50 resize-none"
                      />
@@ -584,20 +636,17 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Save Dialog Modal */}
       <SaveDialog 
         isOpen={isSaveDialogOpen} 
         onClose={() => setIsSaveDialogOpen(false)} 
         onSave={handleNewPlanSave} 
       />
 
-      {/* Chat Overlay */}
       <ChatInterface 
         isOpen={isChatOpen} 
         onClose={() => setIsChatOpen(false)}
         currentInput={currentFormData}
         currentPlan={planMarkdown}
-        setPlanMarkdown={setPlanMarkdown}
       />
     </div>
   );

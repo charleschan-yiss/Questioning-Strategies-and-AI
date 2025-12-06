@@ -1,7 +1,6 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, LiveServerMessage } from "@google/genai";
-import { Mic, MicOff, X, Loader2, MessageSquare, Copy, Check, VolumeX, AlertCircle, Trash2 } from 'lucide-react';
+import { Mic, MicOff, X, Loader2, MessageSquare, Copy, Check, VolumeX, AlertCircle, Trash2, Zap } from 'lucide-react';
 import { LessonInput } from '../types';
 
 interface VoiceAssistantProps {
@@ -102,6 +101,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
     }
 
     if (currentSessionRef.current) {
+        try { currentSessionRef.current.close(); } catch(e) {}
         currentSessionRef.current = null;
     }
     sessionPromiseRef.current = null;
@@ -113,10 +113,12 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
     setIsMuted(false);
 
     try {
+      // 1. Initialize Audio Contexts immediately for speed
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      const inputCtx = new AudioContextClass();
-      const outputCtx = new AudioContextClass();
+      const inputCtx = new AudioContextClass({ sampleRate: 16000 });
+      const outputCtx = new AudioContextClass({ sampleRate: 24000 });
       
+      // Warm up contexts
       await inputCtx.resume();
       await outputCtx.resume();
 
@@ -124,12 +126,20 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
       audioContextRef.current = outputCtx;
       nextStartTimeRef.current = 0;
       
+      // 2. Get Microphone Stream
       if (!navigator.mediaDevices) {
           throw new Error("Microphone access not supported in this browser.");
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+          } 
+      });
       streamRef.current = stream;
 
+      // 3. Initialize Gemini
       const ai = new GoogleGenAI({ apiKey });
       
       keepAliveRef.current = setInterval(() => {
@@ -138,46 +148,53 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
          }
       }, 1000);
 
-      const historyContext = transcripts.slice(-10).map(t => 
-        `${t.role === 'agent' ? 'AI' : 'TEACHER'}: ${t.text}`
-      ).join('\n');
-
+      // 4. Construct Robust System Instruction with Expert/Scholar Persona
       const systemContext = `
-        You are a helpful teaching assistant for a teacher at YISS. 
-        You help brainstorm lesson ideas, suggest questioning strategies, and discuss educational frameworks like CEL 5D+ and Biblical Integration. 
+        You are an **Expert Educational Consultant** and **Distinguished Biblical Scholar** (channeling the persona of N.T. Wright).
+        You are speaking with a teacher at YISS.
         
-        VISUAL CONTEXT (What is on the teacher's screen):
-        The teacher is currently working on:
-        - Unit Name: ${currentInput.unitName || '(Empty)'}
-        - Topic: ${currentInput.topic || '(Empty)'}
-        - Grade Level: ${currentInput.gradeLevel || '(Empty)'}
-        - Subject: ${currentInput.subject || '(Empty)'}
+        **YOUR GOAL:**
+        Help the teacher implement the strategies in their lesson plan with deep theological insight and pedagogical rigor.
+        Be insightful, encouraging, and intellectually stimulating. Catch the nuance of what they say.
         
-        PREVIOUS CONVERSATION HISTORY:
-        ${historyContext ? historyContext : "(No previous conversation)"}
+        **THE LESSON PLAN (You have analyzed this):**
+        Subject: ${currentInput.subject || 'Not specified'}
+        Topic: ${currentInput.topic || 'Not specified'}
+        Grade: ${currentInput.gradeLevel || 'Not specified'}
+        
+        **FULL PLAN CONTENT:**
+        ${currentPlan ? currentPlan : "The teacher is currently brainstorming details."}
+
+        **INSTRUCTIONS:**
+        1. **Speak First:** When the session starts, immediately greet the teacher.
+        2. **Demonstrate Insight:** In your greeting, mention a specific strength, strategy (like Kagan or CEL 5D+), or theological connection you found in their lesson plan so they know you have read it.
+        3. **Tone:** Professional, Warm, Female Academic (Kore). 
+        4. **Brevity:** Keep spoken responses concise (2-3 sentences) unless asked to expound.
       `;
 
       sessionPromiseRef.current = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         config: {
           responseModalities: ['AUDIO'],
+          // Empty object enables transcription
           outputAudioTranscription: {}, 
           systemInstruction: systemContext,
           speechConfig: {
             voiceConfig: {
               prebuiltVoiceConfig: {
-                voiceName: "Puck"
+                voiceName: "Kore" // Female voice
               }
             }
           }
         },
         callbacks: {
-          onopen: () => {
+          onopen: async () => {
             console.log("Session opened");
             setIsConnecting(false);
             setIsActive(true);
             setIsSpeaking(false);
             
+            // --- AUDIO INPUT SETUP ---
             if (!inputContextRef.current || !streamRef.current) return;
             
             const source = inputContextRef.current.createMediaStreamSource(streamRef.current);
@@ -220,8 +237,16 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
 
             source.connect(processor);
             processor.connect(inputContextRef.current.destination);
+
+            // --- TRIGGER HOT-START GREETING ---
+            // Send a hidden text message to force the AI to speak first with analysis
+            const session = await sessionPromiseRef.current;
+            if (session) {
+                session.send({ parts: [{ text: "The user has connected. You have already analyzed their lesson plan. Greet them warmly and mention a specific detail from it to prove you know the context." }] });
+            }
           },
           onmessage: async (msg: LiveServerMessage) => {
+            // Handle Audio Output
             const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
             if (audioData && audioContextRef.current) {
               setIsSpeaking(true);
@@ -251,8 +276,9 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
 
               const currentTime = ctx.currentTime;
               if (nextStartTimeRef.current < currentTime) {
-                nextStartTimeRef.current = currentTime;
+                nextStartTimeRef.current = currentTime + 0.05;
               }
+              
               source.start(nextStartTimeRef.current);
               nextStartTimeRef.current += buffer.duration;
               
@@ -260,11 +286,14 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
               source.onended = () => {
                 scheduledSourcesRef.current.delete(source);
                 if (scheduledSourcesRef.current.size === 0) {
-                    setIsSpeaking(false);
+                    setTimeout(() => {
+                        if (scheduledSourcesRef.current.size === 0) setIsSpeaking(false);
+                    }, 200);
                 }
               };
             }
 
+            // Handle Transcripts
             const outputTranscription = msg.serverContent?.outputTranscription?.text;
             if (outputTranscription) {
                 setTranscripts(prev => {
@@ -310,6 +339,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
                 setError("Connection failed. Check network or API key.");
             }
             setIsActive(false);
+            setIsConnecting(false);
           }
         }
       });
@@ -341,39 +371,9 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
 
   useEffect(() => {
       if (processorRef.current) {
-          processorRef.current.onaudioprocess = (e) => {
-            if (isMutedRef.current) return; 
-
-            const inputData = e.inputBuffer.getChannelData(0);
-            const pcmData = new Int16Array(inputData.length);
-            for (let i = 0; i < inputData.length; i++) {
-                const s = Math.max(-1, Math.min(1, inputData[i]));
-                pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-            }
-            
-            const uint8 = new Uint8Array(pcmData.buffer);
-            let binary = '';
-            const len = uint8.byteLength;
-            for (let i = 0; i < len; i++) {
-                binary += String.fromCharCode(uint8[i]);
-            }
-            const b64Data = btoa(binary);
-
-            if (sessionPromiseRef.current) {
-                sessionPromiseRef.current.then(session => {
-                    if (inputContextRef.current) {
-                         session.sendRealtimeInput({
-                            media: {
-                                mimeType: `audio/pcm;rate=${inputContextRef.current.sampleRate}`,
-                                data: b64Data
-                            }
-                        });
-                    }
-                });
-            }
-          };
+          // Keep mute state synced in closure if needed
       }
-  }, [isActive]); 
+  }, [isActive]);
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -381,9 +381,10 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // Handle plan updates while connected
   useEffect(() => {
     if (isActive && currentSessionRef.current && currentPlan && currentPlan !== prevPlanRef.current) {
-        const updateMessage = `[SYSTEM EVENT] The teacher has just generated or updated the lesson plan.`;
+        const updateMessage = `[SYSTEM UPDATE] The teacher has modified the lesson plan. Here is the new content: ${currentPlan.substring(0, 5000)}...`;
         try {
             currentSessionRef.current.send({ parts: [{ text: updateMessage }] });
         } catch (e) {
@@ -409,7 +410,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
             ? 'bg-red-100 text-red-600 ring-2 ring-red-500 ring-opacity-50 animate-pulse-slow' 
             : 'hover:bg-slate-100 text-slate-600'
         }`}
-        title={isActive ? "Stop Voice Assistant" : "Start Voice Assistant"}
+        title={isActive ? "Stop Voice Assistant" : "Talk to Expert AI"}
       >
         {isConnecting ? (
             <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
@@ -440,7 +441,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
                          <div className="flex items-center">
                              <div className={`w-2 h-2 rounded-full mr-2 ${isSpeaking ? 'bg-green-500 animate-pulse' : 'bg-slate-400'}`}></div>
                              <span className="text-sm font-bold text-slate-700">
-                                {isSpeaking ? "AI Speaking" : isMuted ? "Mic Muted" : "Listening..."}
+                                {isSpeaking ? "Expert Mentor Speaking..." : isMuted ? "Mic Muted" : "Listening..."}
                              </span>
                          </div>
                      )}
@@ -473,46 +474,49 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
                  </div>
              </div>
              
-             {!isConnecting && (
-                 <div className="h-16 bg-slate-50 border-b border-slate-100 flex items-center justify-center relative overflow-hidden flex-shrink-0">
-                     {isSpeaking ? (
-                         <div className="flex items-center space-x-1">
-                             {[...Array(20)].map((_, i) => (
-                                 <div 
-                                    key={i} 
-                                    className="w-1 bg-green-500 rounded-full animate-bounce" 
-                                    style={{ 
-                                        height: `${Math.random() * 20 + 10}px`, 
-                                        animationDuration: `${Math.random() * 0.5 + 0.3}s`,
-                                        animationDelay: `${i * 0.05}s`
-                                    }}
-                                 ></div>
-                             ))}
+             {/* Audio Visualizer / Status Area */}
+             <div className="h-24 bg-slate-50 flex items-center justify-center relative overflow-hidden flex-shrink-0">
+                 {isConnecting ? (
+                     <div className="text-center px-4">
+                         <p className="text-[10px] text-blue-500 font-medium mb-1">ANALYZING LESSON PLAN...</p>
+                         <div className="w-32 h-1 bg-blue-100 rounded-full overflow-hidden mx-auto">
+                             <div className="w-1/2 h-full bg-blue-500 animate-loading-bar"></div>
                          </div>
-                     ) : isMuted ? (
-                         <div className="text-xs text-red-400 font-medium flex items-center">
-                             <VolumeX className="w-3 h-3 mr-1" /> Microphone is muted
-                         </div>
-                     ) : (
-                         <div className="flex items-center space-x-1 opacity-30">
-                             <div className="w-full h-0.5 bg-slate-400"></div>
-                         </div>
-                     )}
-                 </div>
-             )}
+                     </div>
+                 ) : isSpeaking ? (
+                     <div className="flex items-center space-x-1 h-12">
+                         {[...Array(12)].map((_, i) => (
+                             <div 
+                                key={i} 
+                                className="w-1.5 bg-green-500 rounded-full animate-sound-wave" 
+                                style={{ 
+                                    animationDuration: `${Math.random() * 0.5 + 0.4}s`,
+                                    animationDelay: `${i * 0.05}s`
+                                }}
+                             ></div>
+                         ))}
+                     </div>
+                 ) : (
+                     <div className="text-center text-slate-400">
+                         <Zap className="w-6 h-6 mx-auto mb-1 opacity-20" />
+                         <p className="text-[10px]">I'm ready. Ask me about your strategies.</p>
+                     </div>
+                 )}
+             </div>
              
-             <div className="flex-1 overflow-y-auto p-4 bg-white custom-scrollbar space-y-4">
+             {/* Transcript Area */}
+             <div className="flex-1 overflow-y-auto p-3 bg-white custom-scrollbar space-y-3 max-h-60 border-t border-slate-100">
                 {transcripts.length === 0 && !isConnecting ? (
-                    <div className="flex flex-col items-center justify-center h-full text-slate-300 space-y-2 py-8">
-                        <MessageSquare className="w-8 h-8 opacity-20" />
-                        <p className="text-xs text-center">Start speaking to see the conversation...</p>
+                    <div className="flex flex-col items-center justify-center py-4 text-slate-300">
+                        <MessageSquare className="w-6 h-6 opacity-20 mb-1" />
+                        <p className="text-[10px] text-center">Conversation history will appear here.</p>
                     </div>
                 ) : (
                     transcripts.map((t) => (
-                        <div key={t.id} className="flex flex-col items-start animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <div key={t.id} className="flex flex-col items-start animate-in fade-in slide-in-from-bottom-1 duration-300">
                             <div className="flex items-center justify-between w-full mb-1 px-1">
-                                <span className={`text-[10px] font-bold uppercase tracking-wider ${t.role === 'agent' ? 'text-blue-500' : 'text-slate-400'}`}>
-                                    {t.role === 'agent' ? 'AI Assistant' : 'You'}
+                                <span className={`text-[9px] font-bold uppercase tracking-wider ${t.role === 'agent' ? 'text-blue-500' : 'text-slate-400'}`}>
+                                    {t.role === 'agent' ? 'Expert Mentor' : 'You'}
                                 </span>
                                 {t.role === 'agent' && !t.isPartial && (
                                     <button 
@@ -525,13 +529,13 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ apiKey, currentI
                                 )}
                             </div>
                             <div className={`
-                                p-3 rounded-2xl text-sm w-full border relative group
+                                p-2 rounded-lg text-xs w-full border relative group
                                 ${t.role === 'agent' 
                                     ? 'bg-slate-50 border-slate-100 text-slate-700 rounded-tl-none' 
                                     : 'bg-blue-50 border-blue-100 text-blue-900 rounded-tr-none'}
                             `}>
                                 {t.text}
-                                {t.isPartial && <span className="inline-block w-1.5 h-3 ml-1 bg-blue-400 animate-pulse"></span>}
+                                {t.isPartial && <span className="inline-block w-1 h-2 ml-1 bg-blue-400 animate-pulse"></span>}
                             </div>
                         </div>
                     ))

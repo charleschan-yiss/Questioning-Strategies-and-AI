@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { strategies } from '../data/strategies';
 import { SavedPlan, StrategyNode } from '../types';
-import { ChevronRight, ChevronDown, BookOpen, Brain, Zap, MessageCircle, CheckSquare, Square, Folder, ChevronLeft, Menu, FileText, Trash2, Calendar, Layout, FolderOpen, Pencil, Check, X, Info, Download, Upload } from 'lucide-react';
+import { ChevronRight, ChevronDown, BookOpen, Brain, Zap, MessageCircle, CheckSquare, Square, Folder, ChevronLeft, Menu, FileText, Trash2, Calendar, Layout, FolderOpen, Pencil, Check, X, Info, Download, Upload, Search } from 'lucide-react';
 
 interface SidebarProps {
   onToggleStrategy: (id: string) => void;
@@ -17,6 +17,8 @@ interface SidebarProps {
   currentPlanId: string | null;
   onNewPlan: () => void;
   onImportPlan: (plan: SavedPlan) => void;
+  width: number;
+  onWidthChange: (width: number) => void;
 }
 
 const getIcon = (id: string) => {
@@ -28,25 +30,42 @@ const getIcon = (id: string) => {
   return <Folder className="w-4 h-4 mr-2 text-slate-400" />;
 };
 
+// Helper to recursively check if a node has any selected descendants
+const hasSelectedDescendant = (node: StrategyNode, selectedIds: string[]): boolean => {
+    if (selectedIds.includes(node.id)) return true;
+    if (node.children) {
+        return node.children.some(child => hasSelectedDescendant(child, selectedIds));
+    }
+    return false;
+};
+
 const TreeNode: React.FC<{ 
   node: StrategyNode; 
   onToggle: (id: string) => void; 
   selectedIds: string[];
-  level: number 
-}> = ({ node, onToggle, selectedIds, level }) => {
+  level: number;
+  forceExpand?: boolean;
+}> = ({ node, onToggle, selectedIds, level, forceExpand }) => {
   const [isOpen, setIsOpen] = useState(false); // Default closed for cleaner look
   const hasChildren = node.children && node.children.length > 0;
   const isSelected = selectedIds.includes(node.id);
 
-  // Auto-expand if a child is selected
-  React.useEffect(() => {
-    if (hasChildren && node.children?.some(c => selectedIds.includes(c.id))) {
+  // Auto-expand if ANY descendant is selected (Deep check)
+  useEffect(() => {
+    if (hasChildren && hasSelectedDescendant(node, selectedIds)) {
         setIsOpen(true);
     }
-  }, [selectedIds, hasChildren, node.children]);
+  }, [selectedIds, hasChildren, node]);
+
+  // Auto-expand on search
+  useEffect(() => {
+    if (forceExpand) {
+        setIsOpen(true);
+    }
+  }, [forceExpand]);
 
   return (
-    <div className="select-none">
+    <div className="select-none" id={`strategy-node-${node.id}`}>
       <div 
         onClick={(e) => {
              // If has children, toggle fold. If leaf, toggle selection.
@@ -69,10 +88,10 @@ const TreeNode: React.FC<{
                 // Checkbox for leaf nodes
                 <div 
                     onClick={(e) => { e.stopPropagation(); onToggle(node.id); }}
-                    className="hover:text-blue-500"
+                    className="hover:text-green-500"
                 >
                    {isSelected ? (
-                       <CheckSquare className="w-4 h-4 text-blue-600" />
+                       <CheckSquare className="w-4 h-4 text-green-600" />
                    ) : (
                        <Square className="w-4 h-4 text-slate-300" />
                    )}
@@ -95,6 +114,7 @@ const TreeNode: React.FC<{
               onToggle={onToggle} 
               selectedIds={selectedIds}
               level={level + 1} 
+              forceExpand={forceExpand}
             />
           ))}
         </div>
@@ -115,14 +135,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onRenamePlan,
     currentPlanId,
     onNewPlan,
-    onImportPlan
+    onImportPlan,
+    width,
+    onWidthChange
 }) => {
   const [activeTab, setActiveTab] = useState<'strategies' | 'plans'>('strategies');
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const prevSelectedIdsRef = useRef<string[]>([]);
   
-  // Resizable logic
-  const [sidebarWidth, setSidebarWidth] = useState(320);
+  // Watch for new selections and scroll to them
+  useEffect(() => {
+    // Find newly added IDs
+    const newIds = selectedIds.filter(id => !prevSelectedIdsRef.current.includes(id));
+    
+    if (newIds.length > 0) {
+        // Scroll to the last added one
+        const lastId = newIds[newIds.length - 1];
+        setTimeout(() => {
+            const element = document.getElementById(`strategy-node-${lastId}`);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Optional: Flash effect could be added here via class manipulation
+            }
+        }, 100); // Small delay to allow tree expansion to render
+    }
+    
+    prevSelectedIdsRef.current = selectedIds;
+  }, [selectedIds]);
+  
+  // Resizable logic handled by parent via props
   const isResizingRef = useRef(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
@@ -138,7 +181,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       if (!isResizingRef.current) return;
       const newWidth = e.clientX;
       if (newWidth > 200 && newWidth < 600) {
-          setSidebarWidth(newWidth);
+          onWidthChange(newWidth);
       }
   };
 
@@ -173,7 +216,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${plan.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.yiss.json`;
+      
+      const dateStr = new Date().toISOString().split('T')[0];
+      const versionStr = `v${plan.versions.length}`;
+      const safeName = plan.name.replace(/[^a-z0-9\-_]/gi, '_');
+
+      a.download = `${safeName}_${versionStr}_${dateStr}.yiss.json`;
+
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -209,11 +258,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
       if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const filterStrategies = (nodes: StrategyNode[], term: string): StrategyNode[] => {
+    const lowerTerm = term.toLowerCase();
+    
+    const filterNode = (node: StrategyNode): StrategyNode | null => {
+        const matchesSelf = node.label.toLowerCase().includes(lowerTerm);
+        
+        let filteredChildren: StrategyNode[] = [];
+        if (node.children) {
+              filteredChildren = node.children.map(filterNode).filter((n): n is StrategyNode => n !== null);
+        }
+        
+        if (matchesSelf || filteredChildren.length > 0) {
+            return { ...node, children: filteredChildren.length > 0 ? filteredChildren : (node.children ? [] : undefined) };
+        }
+        return null;
+    };
+
+    return nodes.map(filterNode).filter((n): n is StrategyNode => n !== null);
+  };
+
+  const displayedStrategies = useMemo(() => {
+    if (!searchTerm) return strategies;
+    return filterStrategies(strategies, searchTerm);
+  }, [searchTerm]);
+
   return (
     <div 
         ref={sidebarRef}
         className="bg-white border-r border-slate-200 h-screen flex flex-col flex-shrink-0 transition-all duration-75 ease-linear relative"
-        style={{ width: isCollapsed ? '4rem' : `${sidebarWidth}px` }}
+        style={{ width: isCollapsed ? '4rem' : `${width}px` }}
     >
       
       {/* Header */}
@@ -263,15 +337,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="flex-1 overflow-y-auto custom-scrollbar py-2">
         {!isCollapsed ? (
           activeTab === 'strategies' ? (
-            strategies.map((strategy) => (
-                <TreeNode 
-                key={strategy.id} 
-                node={strategy} 
-                onToggle={onToggleStrategy}
-                selectedIds={selectedIds}
-                level={0}
-                />
-            ))
+            <>
+                <div className="px-3 mb-2 sticky top-0 bg-white z-10 pb-2">
+                    <div className="relative">
+                        <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-slate-400" />
+                        <input 
+                            type="text" 
+                            placeholder="Search strategies..." 
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-9 pr-8 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 focus:bg-white transition-colors"
+                        />
+                        {searchTerm && (
+                            <button 
+                                onClick={() => setSearchTerm('')}
+                                className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                </div>
+                {displayedStrategies.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400 text-sm px-4">
+                        No strategies match "{searchTerm}"
+                    </div>
+                ) : (
+                    displayedStrategies.map((strategy) => (
+                        <TreeNode 
+                        key={strategy.id} 
+                        node={strategy} 
+                        onToggle={onToggleStrategy}
+                        selectedIds={selectedIds}
+                        level={0}
+                        forceExpand={searchTerm.length > 0}
+                        />
+                    ))
+                )}
+            </>
           ) : (
             // Saved Plans List
             <div className="px-3 space-y-2">
@@ -280,7 +383,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onClick={handleImportClick}
                         className="flex items-center text-xs text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-1 rounded border border-blue-100"
                     >
-                        <Upload className="w-3 h-3 mr-1" /> Import JSON
+                        <Download className="w-3 h-3 mr-1" /> Import Plan
                     </button>
                     <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
                 </div>
@@ -348,9 +451,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                         <button 
                                             onClick={(e) => { e.stopPropagation(); handleExportPlan(plan); }}
                                             className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors"
-                                            title="Export JSON"
+                                            title="Export Backup"
                                         >
-                                            <Download className="w-3.5 h-3.5" />
+                                            <Upload className="w-3.5 h-3.5" />
                                         </button>
                                         <button 
                                             onClick={(e) => { e.stopPropagation(); startEditing(plan); }}

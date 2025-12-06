@@ -45,6 +45,7 @@ export interface LessonVersion {
     id: string;
     timestamp: number;
     markdown: string;
+    worksheetMarkdown?: string; // NEW: Store worksheet for this version
     strategyIds: string[];
     description?: string; // e.g., "Generated" or "Refined: Update intro"
 }
@@ -56,8 +57,15 @@ export interface SavedPlan {
     updatedAt: number;
     data: LessonInput;
     markdown: string;
+    worksheetMarkdown?: string; // NEW: Store latest worksheet
     strategyIds: string[];
     versions: LessonVersion[];
+}
+
+export interface StrategySuggestion {
+  id: string;
+  label: string;
+  rationale: string;
 }
 
 export enum AppState {

@@ -1,40 +1,64 @@
-
 import { GoogleGenAI } from "@google/genai";
-import { LessonInput, StrategyNode } from "../types";
+import { LessonInput, StrategyNode, StrategySuggestion } from "../types";
+import { strategies } from "../data/strategies";
+
+// Helper to flatten the strategy tree into a lightweight list for the AI
+const flattenStrategies = (nodes: StrategyNode[]): {id: string, label: string, desc: string}[] => {
+    let flat: {id: string, label: string, desc: string}[] = [];
+    nodes.forEach(node => {
+        // We only want leaf nodes (strategies), not categories, generally. 
+        // But if a node has children, we check them.
+        if (node.children && node.children.length > 0) {
+            flat = [...flat, ...flattenStrategies(node.children)];
+        } else {
+            flat.push({
+                id: node.id,
+                label: node.label,
+                desc: node.description || node.fullDefinition || ""
+            });
+        }
+    });
+    return flat;
+};
 
 const getSystemInstruction = () => `
-You are an expert curriculum designer, senior teacher, and **Biblical Scholar** at YISS. Your goal is to generate high-quality lesson plans that strictly adhere to the YISS Lesson Planner format.
+You are an expert curriculum designer, senior teacher, and **Distinguished Biblical Scholar** (specifically modeling the theological depth and tone of **N.T. Wright**). Your goal is to generate high-quality lesson plans that strictly adhere to the YISS Lesson Planner format.
 
-**CRITICAL PERSONA FOR BIBLICAL INTEGRATION:**
-When generating the Biblical Integration Analysis (PAQ Method), you must act as a **Theologian-in-Residence**.
-*   **Avoid superficial connections** (e.g., "God made math so calculate carefully").
-*   **Avoid "proof-texting"** (finding a verse just because it shares a keyword).
-*   **Focus on Redemptive History:** Connect the topic to Creation, Fall, Redemption, or Restoration.
-*   **Focus on Teleology:** What is the ultimate *purpose* or *end goal* of this subject in God's economy?
-*   **Scholarship:** Provide hermeneutically sound exegesis.
+**CORE DIRECTIVE: DEEP, EXPERT INTEGRATION**
+You are NOT just a content generator; you are a **Mentor Teacher**. When you use a strategy (CEL 5D+, Kagan, Questioning), you must do more than list it. You must **weave it** into the lesson and explain the **pedagogical reasoning** behind it.
 
-**The Frameworks (Apply ONLY if selected by user):**
+**CRITICAL PERSONA FOR BIBLICAL INTEGRATION (PAQ):**
+When generating the Biblical Integration Analysis, you must act as a **Theologian-in-Residence**.
+*   **Theological Lens (N.T. Wright Style):** Do not provide shallow moralisms or simple proof-texting. Instead, frame the academic content within the **Grand Narrative of Scripture**: *Creation, Fall, Israel, Jesus, and New Creation*.
+*   **Key Themes:**
+    *   **Vocation (Imago Dei):** How does mastering this subject help the student act as a genuine image-bearer, reflecting God's wise rule into the world?
+    *   **New Creation:** How does this truth anticipate the renewed world? Avoid dualism (separating "spiritual" from "secular"). Show how *this specific topic* matters to God's good creation.
+    *   **Epistemology of Love:** How does knowing this truth require us to love the object of our study more?
+*   **Teacher Insight:** Write a **substantial, scholarly commentary** (300-400 words) for the teacher. Use academic theological terms (e.g., *Eschatology*, *Teleology*, *Covenant*, *Idolatry*, *Common Grace*) but explain them clearly.
+*   **Student Activities:** These must be **deeply formative**. Move beyond "read a verse." Design activities that shape the student's *habits of heart* and *worldview*.
+
+**STRATEGY INTEGRATION RULES (Apply ONLY if selected by user):**
 
 1.  **Effective Questioning Strategies:**
-    *   Use the specific strategy/strategies selected by the user.
-    *   Create specific questions relevant to the topic using these strategies.
+    *   **Cognitive Lift:** Explain *why* a specific questioning technique was chosen.
+    *   **Scripting:** Provide specific, high-level questions verbatim.
 
 2.  **CEL 5D+ Framework (University of Washington):**
-    *   If specific dimensions are selected (e.g., Purpose, Engagement), prioritize those in the lesson design.
+    *   **Operationalize It:** Do not just list the dimension. Explain the **Teacher Move**.
+    *   *Example:* If "Student Engagement" is selected, write: "The teacher facilitates intellectual engagement by assigning a complex task where students must rely on each other (positive interdependence), rather than passive listening."
 
 3.  **Instructional Strategies (Kagan):**
-    *   If Kagan structures are selected, explain exactly how to facilitate them in this lesson.
+    *   **The "Why":** Explain the social/academic benefit. (e.g., "Fan-N-Pick is used here to ensure equal participation and immediate peer coaching, preventing 'hitchhiking'.")
     *   **Classbuilding (Dual Option):** If a classbuilding strategy is selected, you MUST provide BOTH an "Option A: Academic" (tied to lesson content) and "Option B: Social/Fun" (brain break) variation.
 
 4.  **Biblical Integration (PAQ Method):**
-    *   **P – PURPOSE:** Establishing the divine intent/Teleology.
-    *   **A – ASSUMPTIONS:** Uncovering worldview/epistemological beliefs.
-    *   **Q – QUESTIONS:** Ethical application and heart orientation.
+    *   **P – PURPOSE (Teleology):** What is the *divine intent* for this exact subject matter? Why does it exist in God's economy?
+    *   **A – ASSUMPTIONS (Worldview):** Uncover hidden worldview assumptions in the secular curriculum (e.g., Naturalism, Relativism, Humanism).
+    *   **Q – QUESTIONS (Ethics & Application):** Craft Essential Questions that provoke ethical reasoning and worldview formation.
 
 **Critical Rules:**
 *   **Grade Level Accuracy:** If the user does not provide a Grade Level, and it cannot be clearly inferred from uploaded files, you MUST write "Not Specified". Do NOT invent a grade level.
 *   **Format:** Output strictly in Markdown. Do not wrap in JSON.
-*   **Context Awareness:** You must analyze the specific content of uploaded files or user context. Quote specific parts of the lesson plan to show connection.
 `;
 
 export const generateLessonPlan = async (
@@ -52,8 +76,14 @@ export const generateLessonPlan = async (
   // 1. Separate strategies by type strict filtering
   const celList = selectedStrategies.filter(s => s.id.includes('cel'));
   const paqList = selectedStrategies.filter(s => s.id.includes('paq'));
-  const kaganList = selectedStrategies.filter(s => s.id.includes('kagan'));
-  // Questioning list MUST exclude CEL, PAQ, AND Kagan
+  
+  // Kagan Lists
+  // Generic Kagan structures (Review, Discussion, Thinking)
+  const kaganList = selectedStrategies.filter(s => s.id.includes('kagan') && !s.optionA); // Exclude classbuilding which has options
+  // Classbuilding Kagan structures
+  const kaganClassbuildingList = selectedStrategies.filter(s => s.id.includes('kagan') && s.optionA);
+
+  // Questioning list MUST exclude CEL, PAQ, AND ALL Kagan
   const questioningList = selectedStrategies.filter(s => 
     !s.id.includes('cel') && 
     !s.id.includes('paq') && 
@@ -68,73 +98,60 @@ export const generateLessonPlan = async (
 
   const kaganContext = kaganList.length > 0 ? `
     **SELECTED KAGAN STRUCTURES:**
-    ${kaganList.map(s => {
-        let details = `- ${s.label}: ${s.fullDefinition} (Script: ${s.teacherScript})`;
-        if (s.optionA) details += `\n  - Note: This is a Classbuilding strategy. Generate BOTH Option A (Academic: ${s.optionA}) and Option B (Social: ${s.optionB}) variations.`;
-        return details;
-    }).join('\n')}
+    ${kaganList.map(s => `- ${s.label}: ${s.fullDefinition} (Script: ${s.teacherScript})`).join('\n')}
+  ` : '';
+
+  const kaganClassContext = kaganClassbuildingList.length > 0 ? `
+    **SELECTED KAGAN CLASSBUILDING STRUCTURES:**
+    ${kaganClassbuildingList.map(s => `
+        - ${s.label}: ${s.fullDefinition}
+          (Teacher Script: ${s.teacherScript})
+          (Academic Goal: ${s.optionA})
+          (Social Goal: ${s.optionB})
+    `).join('\n')}
   ` : '';
 
   const celContext = celList.length > 0 ? `
     **SELECTED CEL 5D+ DIMENSIONS:**
-    ${celList.map(s => `- ${s.label}: ${s.description}`).join('\n')}
+    ${celList.map(s => `- ${s.label}: ${s.description} (Pedagogical Value: ${s.pedagogicalValue})`).join('\n')}
   ` : '';
 
   // 3. Configure PAQ Logic
-  const pSelected = paqList.some(s => s.id === 'paq-p');
-  const aSelected = paqList.some(s => s.id === 'paq-a');
-  const qSelected = paqList.some(s => s.id === 'paq-q');
+  const isPaqRootSelected = selectedStrategies.some(s => s.id === 'paq-method-root');
+  const isAnyPAQ = paqList.length > 0 || isPaqRootSelected;
   
-  // If NO specific PAQ is selected, and NO PAQ root is selected, we skip it.
-  const isSpecificPAQ = pSelected || aSelected || qSelected;
-  const isAnyPAQ = paqList.length > 0;
+  const pSelected = isPaqRootSelected || paqList.some(s => s.id === 'paq-p');
+  const aSelected = isPaqRootSelected || paqList.some(s => s.id === 'paq-a');
+  const qSelected = isPaqRootSelected || paqList.some(s => s.id === 'paq-q');
 
-  // Dynamically build the Section Template based on selection
   let paqTemplate = '';
-  
-  // Only generate PAQ section if specific strategies are selected OR the root category was selected
+
   if (isAnyPAQ) {
-      paqTemplate = `## Biblical Integration Analysis (PAQ Method)`;
-
-      // If specific P is selected OR no specifics are selected (default all), include P
-      if (pSelected || !isSpecificPAQ) {
-        paqTemplate += `\n\n### P - Purpose (The Foundation)
-    *   **Divine Intent (Teleology):** [What is the ultimate purpose of this subject in God's creation? How does it reflect His nature?]
-    *   **Scriptural Basis:** [Book Chapter:Verse]
-        *   *Scholarly Exegesis:* [Deep theological explanation. Do not just quote it. Explain the context.]
-        *   *Word Study (Mandatory if applicable):* [Hebrew/Greek word] - [Definition and nuance]
-    *   **Teacher Insight:** [Deep philosophical/theological explanation for the teacher. Connect the "What" of the lesson to the "Why" of the Kingdom.]
-    *   **Student Activity:**
-        *   *Activity Description:* [Specific activity to deduce this purpose]
-        *   *Pedagogical Rationale:* [Why this activity bridges the gap]
-        *   *Facilitation:* [Brief steps]`;
+      paqTemplate = `## Biblical Integration Analysis (PAQ Method)
+      (NOTE: Write as a Distinguished Scholar (N.T. Wright Persona). Provide DEEP analysis, Extensive Scriptural Exegesis, Original Languages, and Robust Application.)`;
+      
+      if (pSelected || !isAnyPAQ) {
+        paqTemplate += `\n\n### P - Purpose (Teleology & Design)
+*   **Divine Intent (Detailed Teleology):** (Provide a deep analysis of the *Telos* of this subject. How does it reflect God's wisdom, order, or beauty? Use the concept of *New Creation*—how will this subject matter in the renewed earth?)
+*   **Theological Framework:** (Connect explicitly to Creation, Fall, Redemption, or Restoration.)
+*   **Scriptural Foundation & Exegesis:** (Quote full passage(s). Provide a solid paragraph of exegesis. Do not just cite; explain the context and why it applies here.)
+*   **Original Language Insight:** (Identify a relevant Greek/Hebrew term—e.g., *Logos, Tzelem, Oikonomia*—define it, and explain its nuance here.)
+*   **Teacher Insight:** (Write a comprehensive 300+ word theological reflection. Discuss how teaching this topic well is an act of "Vocational Holiness" or "Royal Priesthood".)
+*   **Student Activity Implementation:** (Create a detailed, step-by-step activity guide. Include: 1. Activity Title, 2. Materials Needed, 3. Step-by-Step Procedure, 4. Debrief Questions that explicitly connect the activity to the theological purpose.)`;
       }
-
-      if (aSelected || !isSpecificPAQ) {
-        paqTemplate += `\n\n### A - Assumptions (The Logic Check)
-    *   **Worldview Analysis:** [Identify a secular claim or "unspoken belief" presented as fact.]
-    *   **Scripture for Comparison:** [Book Chapter:Verse]
-        *   *Theological Contrast:* [How does the Biblical worldview challenge this assumption?]
-    *   **Teacher Insight:** [Deep explanation: How does the textbook's epistemology differ from the Biblical view?]
-    *   **Student Activity:**
-        *   *Activity Description:* [Connect & Compare activity]
-        *   *Pedagogical Rationale:* [Why this activity bridges the gap]
-        *   *Facilitation:* [Brief steps]`;
+      if (aSelected || !isAnyPAQ) {
+        paqTemplate += `\n\n### A - Assumptions (Worldview Critique)
+*   **Underlying Secular Assumptions:** (Analyze the curriculum deeply. Identify "Idols" of the age—Naturalism, Individualism, Consumerism. How does the standard view distort reality?)
+*   **Christian Counter-Narrative (Subversive Fulfillment):** (How does the Christian worldview tell a "better story" that fulfills the longing behind the secular error while correcting the distortion?)
+*   **Scriptural Defense:** (Quote full passage(s) that refute the secular view or support the Christian view.)
+*   **Teacher Insight:** (Write a comprehensive 300+ word deep dive into the history of ideas regarding this topic. Help the teacher understand the "worldview war" at play.)
+*   **Student Activity Implementation:** (Create a "Worldview Detective" or critique activity. Include: 1. Objective, 2. Specific media/text to analyze, 3. Step-by-Step instructions on how to lead the critique, 4. Guiding questions for students.)`;
       }
-
-      if (qSelected || !isSpecificPAQ) {
-        paqTemplate += `\n\n### Q - Questions (The Ethical Application)
-    *   **Essential Questions (Heart Orientation):**
-        *(Provide at least 3 distinct, open-ended questions. Format exactly as follows)*:
-
-        1.  **Question:** [Deep Question probing the student's heart/ethics regarding this specific topic]
-            *   *Teacher Rationale:* [Explain to the teacher WHY this question is vital. How does it connect the specific academic concept to the Biblical Worldview?]
-
-        2.  **Question:** [Deep Question regarding the application of this knowledge in a fallen world]
-            *   *Teacher Rationale:* [Theological connection and facilitation tip.]
-
-        3.  **Question:** [Question provoking personal responsibility or redemptive action]
-            *   *Teacher Rationale:* [Theological connection and facilitation tip.]`;
+      if (qSelected || !isAnyPAQ) {
+        paqTemplate += `\n\n### Q - Questions (Ethical Application)
+*   **Essential Ethical Questions:** (Draft 3-4 complex, multi-layered questions that have no easy answer. These should force students to wrestle with *Virtue* and *Kingdom Ethics*.)
+*   **Teacher Insight:** (Write a robust 300+ word explanation of the ethical frameworks necessary to answer these questions from a Christ-centered perspective. Discuss "Virtue Formation" and "Habits of the Heart".)
+*   **Student Activity Implementation:** (Design a Case Study, Debate, or Ethical Lab. Include: 1. Scenario Description, 2. Rules of Engagement, 3. Step-by-Step Flow of the activity, 4. Conclusion/Reflection prompt.)`;
       }
   }
 
@@ -143,13 +160,20 @@ export const generateLessonPlan = async (
     **OUTPUT STRUCTURE (STRICT) - USE "<<<SECTION_BREAK>>>" TO SEPARATE SECTIONS:**
 
     ## Full Integrated Lesson Plan
-    (The complete, refined lesson plan incorporating all elements into the standard YISS format: Topic, Standards, Objectives, Materials, Procedures, etc. This must be the FIRST section.)
+    (The complete, refined lesson plan. WEAVE the selected strategies into the procedures. Do not just list them; explain their integration as a Master Teacher would.)
+
+    <<<SECTION_BREAK>>>
+
+    ${celList.length > 0 ? `
+    ## CEL 5D+ Framework
+    (MANDATORY: Provide a detailed breakdown of the selected CEL 5D+ Dimensions: ${celList.map(s => s.label).join(', ')}. For each, explain the specific Teacher Move and Student Evidence for this lesson.)
+    ` : 'NO_CEL_STRATEGIES'}
 
     <<<SECTION_BREAK>>>
 
     ${questioningList.length > 0 ? `
     ## Questioning Strategy Integration Guide
-    (A deep dive explanation on HOW to use the selected Questioning Strategies within this lesson. Do not just list them; explain the facilitation specifically for this topic.)
+    (Deep dive on Questioning Strategies. Explain the 'Cognitive Lift' of the questions. Why were these specific strategies chosen for this content?)
     ` : 'NO_QUESTIONING_STRATEGIES'}
 
     <<<SECTION_BREAK>>>
@@ -158,147 +182,251 @@ export const generateLessonPlan = async (
 
     <<<SECTION_BREAK>>>
 
-    ${kaganList.length > 0 ? `
+    ${(kaganList.length > 0 || kaganClassbuildingList.length > 0) ? `
     ## Instructional Strategy Integration Guide
-    (Introduction to the strategies selected. This is the top-level header.)
+    (This is the top-level header for all cooperative learning strategies.)
 
+    ${kaganList.length > 0 ? `
     ### Kagan Structures Integration
-    (Detailed instructions on how to run the selected Kagan structures in this specific lesson context. Include the teacher script and social skill focus. This must be a sub-section starting with ###)
-    (IF CLASSBUILDING STRUCTURE SELECTED: You MUST provide two distinct sub-headers for that structure: "Option A: Academic Connection" and "Option B: Social/Classbuilding Connection")
+    (Detailed instructions. Explain the 'Pedagogical Why'—how this structure enhances engagement or accountability for this specific lesson.)
+    ` : ''}
+
+    ${kaganClassbuildingList.length > 0 ? `
+    ### Kagan Classbuilding Integration
+    (Detailed instructions for: ${kaganClassbuildingList.map(s => s.label).join(', ')}.)
+    (CRITICAL: For each Classbuilding strategy, you MUST provide "Option A: Academic" AND "Option B: Social" variations.)
+    ` : ''}
     ` : 'NO_INSTRUCTIONAL_STRATEGIES'}
 
     <<<SECTION_BREAK>>>
 
     ## Integration Highlights Summary
-    (A brief executive summary of what was changed or emphasized.)
+    (Brief summary of the frameworks used.)
   `;
 
   let prompt = '';
 
-  // MODE 1: REFINEMENT / EDITING
   if (refinementText && currentPlan) {
       prompt = `
-      You are acting as a SURGICAL EDITOR for an existing lesson plan.
-      
-      **CURRENT LESSON PLAN (Context):**
-      ${currentPlan}
-
-      **USER REQUEST FOR CHANGES:**
-      "${refinementText}"
-      
+      You are acting as a SURGICAL EDITOR.
+      **CURRENT PLAN:** ${currentPlan}
+      **USER REQUEST:** "${refinementText}"
       ${questioningContext}
       ${kaganContext}
+      ${kaganClassContext}
       ${celContext}
-
-      ${input.files && input.files.length > 0 ? `**NEWLY ATTACHED FILES:** The user has provided ${input.files.length} new files. Use information from these files to fulfill the request.` : ''}
-      ${input.links && input.links.length > 0 ? `**NEWLY ATTACHED LINKS:** ${input.links.join(', ')}.` : ''}
-
-      **STRICT EDITING RULES:**
-      1. **ONLY** change the parts of the lesson plan relevant to the "User Request" or the newly selected strategies.
-      2. **PRESERVE** the rest of the content exactly as is.
-      3. **RE-GENERATE** the analysis sections to match the new edits.
-
+      **STRICT EDITING RULES:** Only change what is requested.
       ${structureInstructions}
       `;
-  } 
-  // MODE 2: CREATION
-  else {
+  } else {
+      // Logic for "Auto-Fill" if lists are empty but user wants a plan
+      // If NO strategies selected at all, we can ask AI to pick best ones.
+      const autoFillInstructions = (selectedStrategies.length === 0) 
+        ? "NOTE: The user has NOT selected specific strategies. You must ANALYZE the lesson content and AUTO-SELECT the most appropriate Questioning, PAQ, and Kagan strategies to enhance this lesson. Fulfill all sections of the Output Structure using your best judgment." 
+        : "";
+
       prompt = `
-        Create a detailed lesson plan for the following context:
+        Create a lesson plan.
         Topic: ${input.topic}
         Subject: ${input.subject}
-        Grade Level: ${input.gradeLevel}
-        Unit Name: ${input.unitName}
-        Standards/Goals: ${input.standards}
-        Additional Context: ${input.context}
+        Grade: ${input.gradeLevel}
+        Standards: ${input.standards}
+        Context: ${input.context}
         
-        ${input.links && input.links.length > 0 ? `Referenced Links: ${input.links.join(', ')}.` : ''}
-        ${input.files && input.files.length > 0 ? `I have attached ${input.files.length} file(s) for reference. Please analyze the content within these files.` : ''}
+        ${autoFillInstructions}
 
-        **INSTRUCTIONS:**
-        1. Base the lesson plan strictly on the provided inputs. If Subject/Grade/Standards are missing, write "Not Specified".
-        
         ${questioningContext}
         ${kaganContext}
+        ${kaganClassContext}
         ${celContext}
 
         ${structureInstructions}
       `;
   }
 
-  // Build the parts array for the user message
   const userParts: any[] = [{ text: prompt }];
-
-  // Attach any files as inline data
   if (input.files && input.files.length > 0) {
       input.files.forEach(file => {
-          userParts.push({
-              inlineData: {
-                  mimeType: file.mimeType,
-                  data: file.data
-              }
-          });
+          userParts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
       });
   }
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      config: {
-        systemInstruction: getSystemInstruction(),
-        temperature: 0.7, 
-        maxOutputTokens: 8192,
-        tools: [{ googleSearch: {} }]
-      },
-      contents: [
-        { role: 'user', parts: userParts }
-      ]
+      model: 'gemini-3-pro-preview', // Upgraded for complex reasoning
+      config: { systemInstruction: getSystemInstruction(), temperature: 0.7, maxOutputTokens: 8192 },
+      contents: [{ role: 'user', parts: userParts }]
     });
-
-    if (response.text) {
-        return response.text;
-    } else {
-        throw new Error("No response text generated");
-    }
-
+    return response.text || "No response text generated";
   } catch (error) {
     console.error("Error generating lesson plan:", error);
     throw error;
   }
 };
 
-export const generateResourceContent = async (strategy: StrategyNode, planContext: string): Promise<string> => {
+export const suggestStrategies = async (input: LessonInput, userPurpose?: string): Promise<StrategySuggestion[]> => {
     if (!process.env.API_KEY) {
         throw new Error("API Key is missing");
     }
+
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    // Get all available strategies as a flat list for the AI to choose from
+    const allStrategies = flattenStrategies(strategies);
+    const strategiesContext = allStrategies.map(s => `${s.id}: ${s.label} - ${s.desc}`).join('\n');
+
+    const prompt = `
+      You are an expert instructional coach. 
+      Analyze the teacher's lesson inputs below and recommend the BEST teaching strategies from the provided list that would most improve student engagement and learning outcomes for this specific topic.
+
+      ${userPurpose ? `**USER GOAL:** The teacher specifically wants to achieve: "${userPurpose}". **INSTRUCTION:** If the user specifies a number (e.g., "give me 5"), provide exactly that many. If no number is specified, provide exactly 3.` : 'Select exactly 3 strategies.'}
+
+      **TEACHER INPUT:**
+      Topic: ${input.topic}
+      Subject: ${input.subject}
+      Grade: ${input.gradeLevel}
+      Context: ${input.context}
+      
+      **AVAILABLE STRATEGIES:**
+      ${strategiesContext}
+
+      **INSTRUCTIONS:**
+      1. Select strategies that are a perfect fit.
+      2. Return ONLY a JSON array. 
+      3. Format: [{ "id": "strategy-id", "label": "Strategy Name", "rationale": "One sentence explaining why this fits.", "action": "A brief actionable tip." }]
+    `;
+
+    const userParts: any[] = [{ text: prompt }];
+    // Attach files if they exist so the AI can read the lesson plan to make better suggestions
+    if (input.files && input.files.length > 0) {
+        input.files.forEach(file => {
+            userParts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
+        });
+    }
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-pro-preview', // Upgraded for better reasoning
+            config: { 
+                temperature: 0.5, 
+                responseMimeType: "application/json" 
+            },
+            contents: [{ role: 'user', parts: userParts }]
+        });
+
+        if (response.text) {
+            const suggestions = JSON.parse(response.text);
+            return suggestions;
+        }
+        return [];
+    } catch (error) {
+        console.error("Error suggesting strategies:", error);
+        throw error;
+    }
+};
+
+export const generateResourceContent = async (
+    strategy: StrategyNode, 
+    lessonPlanMarkdown: string,
+    customInstructions?: string,
+    gradeLevel?: string
+): Promise<string> => {
+    if (!process.env.API_KEY) {
+        throw new Error("API Key is missing");
+    }
+
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     const prompt = `
-        You are a teaching resource generator.
+        You are a world-class educational designer and typography expert.
         
-        **TASK:** Create a classroom worksheet/resource for the following Kagan Structure: "${strategy.label}".
+        CONTEXT:
+        The teacher is using the cooperative learning strategy: "${strategy.label}" (${strategy.description}).
+        Target Audience: Grade ${gradeLevel || 'level implied by content'}.
         
-        **LESSON CONTEXT:**
-        ${planContext.substring(0, 2000)}...
+        TEACHER'S CUSTOM INSTRUCTIONS:
+        "${customInstructions || 'Create a general activity based on the lesson plan.'}"
 
-        **STRATEGY DETAILS:**
-        ${strategy.fullDefinition}
-        Option A (Academic): ${strategy.optionA}
-        Option B (Social): ${strategy.optionB}
-
-        **INSTRUCTIONS:**
-        Generate a clean, printable HTML-formatted list of items (questions, cards, or prompts) suitable for this strategy.
-        If it's "Find Someone Who", create a grid of 9-12 items.
-        If it's "Who Am I", create a list of identities with clues.
-        If it's "Mix-N-Match", create pairs.
+        TASK:
+        Create a high-quality, print-ready HTML/CSS resource worksheet specifically for this strategy.
         
-        Output ONLY the content in HTML format (no markdown code blocks), styled simply for printing.
+        STRICT DESIGN & FORMATTING RULES:
+        1. **Output Format**: Return ONLY pure, valid HTML code with embedded CSS. Do NOT use markdown code blocks.
+        2. **CSS Styling**:
+           - Use 'Arial', 'Helvetica', sans-serif for legibility.
+           - **Print Optimization**: Use @media print settings to ensure backgrounds print and margins are correct (0.5in).
+           - **Borders**: Use thick (2px or 3px) black solid borders for cut-out cards or bingo grids.
+           - **Spacing**: Ensure ample whitespace for students to write.
+           - **Cards**: If the strategy is "Fan-N-Pick", "Quiz-Quiz-Trade", or "Flashcards", create a grid of cards (e.g., 2x4 or 2x3 per page) with dashed lines for cutting.
+           - **Grids**: If the strategy is "Find Someone Who", create a neat 3x3 or 4x4 grid.
+           - **Typography**: Headers should be bold and distinct. Content text should be at least 12pt.
+        3. **Content Quality**:
+           - No spelling errors.
+           - Content must be factually accurate based on the lesson plan.
+           - Tone should be age-appropriate for Grade ${gradeLevel}.
+        
+        LESSON PLAN SOURCE MATERIAL:
+        ${lessonPlanMarkdown}
     `;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt
-    });
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-pro-preview', // Upgraded for high-quality HTML generation
+            config: { temperature: 0.4 }, // Lower temperature for precision
+            contents: [{ role: 'user', parts: [{ text: prompt }] }]
+        });
+        
+        let text = response.text || "<h1>Error generating resource</h1>";
+        // Clean up markdown code blocks if present (just in case)
+        text = text.replace(/```html/g, '').replace(/```/g, '');
+        return text;
+    } catch (error) {
+        console.error("Error generating resource:", error);
+        throw error;
+    }
+};
 
-    return response.text || "<p>Could not generate resource.</p>";
+export const generateWorksheet = async (
+    lessonPlanMarkdown: string, 
+    gradeLevel: string
+): Promise<string> => {
+    if (!process.env.API_KEY) {
+        throw new Error("API Key is missing");
+    }
+
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+    const prompt = `
+        You are an expert curriculum developer.
+        
+        TASK:
+        Create a high-quality, student-facing worksheet based on the lesson plan provided below.
+        Target Audience: Grade ${gradeLevel || 'level as implied by content'}.
+        
+        REQUIREMENTS:
+        1. **Professional Header:** Include spaces for Name, Date, and Class.
+        2. **Sections:** Include clear sections for:
+           - Instructions
+           - Key Concepts / Vocabulary (with space for definitions)
+           - Main Activity / Questions (numbered, with space for writing answers)
+           - Reflection or Exit Ticket
+        3. **Tone:** Student-friendly, encouraging, and clear.
+        4. **Format:** Output in clean MARKDOWN. Use tables where appropriate.
+        
+        LESSON PLAN SOURCE:
+        ${lessonPlanMarkdown}
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-pro-preview', // Upgraded for better document structuring
+            config: { temperature: 0.5 },
+            contents: [{ role: 'user', parts: [{ text: prompt }] }]
+        });
+        
+        return response.text || "Failed to generate worksheet.";
+    } catch (error) {
+        console.error("Error generating worksheet:", error);
+        throw error;
+    }
 };
